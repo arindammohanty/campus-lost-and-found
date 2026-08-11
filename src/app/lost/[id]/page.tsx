@@ -43,7 +43,7 @@ export default async function LostItemDetailsPage({ params }: { params: { id: st
         </div>
         
         <h2 className="mb-8 text-2xl font-black uppercase tracking-widest border-b-2 border-black pb-2">Mathematical Visual Matches</h2>
-        <MatchResults textEmbedding={lost_item.text_embedding} />
+        <MatchResults lostItem={lost_item} />
       </div>
     </div>
   )

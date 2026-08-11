@@ -3,13 +3,11 @@
 import { useState, FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
-import { useMultimodalModel } from '@/hooks/useMultimodalModel'
 import Link from 'next/link'
 
 export default function LostPage() {
   const router = useRouter()
   const supabase = createClient()
-  const { isReady, isModelLoading, loadingProgress, generateTextEmbedding } = useMultimodalModel()
   
   const [description, setDescription] = useState('')
   const [loading, setLoading] = useState(false)
@@ -17,7 +15,7 @@ export default function LostPage() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
-    if (!description || !isReady) return
+    if (!description) return
 
     setLoading(true)
     setMessage('')
@@ -26,21 +24,18 @@ export default function LostPage() {
       const { data: { user }, error: userError } = await supabase.auth.getUser()
       if (userError || !user) throw new Error('User not authenticated')
 
-      const embeddingArray = await generateTextEmbedding(description)
-      const embedding = Array.from(embeddingArray)
-
       // Will fail gracefully if DB isn't live
       const { error: insertError } = await supabase
         .from('lost_items')
         .insert({
           owner_id: user.id,
-          description,
-          text_embedding: embedding,
+          description
+          // text_embedding is now optional upon creation, will be generated upon scanning
         })
 
       if (insertError) throw insertError
 
-      setMessage('REPORT SUBMITTED SUCCESSFULLY')
+      setMessage('LISTING CREATED SUCCESSFULLY')
       setTimeout(() => {
         router.push('/dashboard')
       }, 1500)
@@ -61,9 +56,9 @@ export default function LostPage() {
       </header>
 
       <div className="max-w-3xl mx-auto">
-        <h1 className="text-5xl font-black tracking-tighter uppercase mb-4">Report Lost</h1>
+        <h1 className="text-5xl font-black tracking-tighter uppercase mb-4">Create Lost Listing</h1>
         <p className="text-sm font-bold uppercase mb-12 opacity-80">
-          Provide detailed parameters. Our mathematical engine will locate visual matches.
+          Provide a detailed description. You can scan for visual matches from your dashboard anytime.
         </p>
         
         <form onSubmit={handleSubmit} className="space-y-8">
@@ -84,10 +79,10 @@ export default function LostPage() {
 
           <button
             type="submit"
-            disabled={loading || !isReady || !description}
+            disabled={loading || !description}
             className="w-full border-2 border-black bg-black px-6 py-4 text-white text-lg font-black uppercase hover:bg-white hover:text-black transition-colors disabled:bg-gray-200 disabled:text-gray-400 disabled:border-gray-200 disabled:cursor-not-allowed"
           >
-            {loading ? 'Processing Array...' : !isReady ? (isModelLoading && loadingProgress ? `Downloading AI Model... ${loadingProgress.progress ? Math.round(loadingProgress.progress) : 0}%` : 'Initializing Transformers.js...') : 'Execute Semantic Search'}
+            {loading ? 'Saving Listing...' : 'Create Listing'}
           </button>
 
           {message && (
