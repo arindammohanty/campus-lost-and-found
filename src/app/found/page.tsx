@@ -21,7 +21,12 @@ export default function FoundPage() {
     const selected = e.target.files?.[0]
     if (selected) {
       setFile(selected)
-      setPreview(URL.createObjectURL(selected))
+      
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setPreview(reader.result as string)
+      }
+      reader.readAsDataURL(selected)
     }
   }
 
@@ -83,7 +88,7 @@ export default function FoundPage() {
         setMessage(`ERROR SAVING TO DATABASE: ${dbErr.message}`)
       }
     } catch (err: any) {
-      setMessage(`ERROR: ${err.message}`)
+      setMessage(`ERROR: ${err instanceof Error ? err.message : typeof err === 'string' ? err : JSON.stringify(err)}`)
     } finally {
       setLoading(false)
     }

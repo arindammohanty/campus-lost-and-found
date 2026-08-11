@@ -45,7 +45,7 @@ export default function LostPage() {
         router.push('/dashboard')
       }, 1500)
     } catch (err: any) {
-      setMessage(`ERROR: ${err.message}`)
+      setMessage(`ERROR: ${err instanceof Error ? err.message : typeof err === 'string' ? err : JSON.stringify(err)}`)
     } finally {
       setLoading(false)
     }
