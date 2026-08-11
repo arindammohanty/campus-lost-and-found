@@ -60,26 +60,24 @@ export default async function DashboardPage() {
 
         {/* Primary Actions */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-16">
-          <Link href="/lost" className="group block relative overflow-hidden rounded-3xl bg-white border border-gray-200 p-8 hover:shadow-2xl hover:shadow-black/5 hover:-translate-y-1 transition-all duration-300">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-gray-50 rounded-bl-[100px] -z-10 group-hover:bg-black transition-colors duration-500"></div>
-            <div className="w-12 h-12 bg-black text-white rounded-2xl flex items-center justify-center mb-6 shadow-lg">
+          <Link href="/lost" className="group block relative overflow-hidden rounded-3xl bg-white border border-gray-200 p-8 hover:bg-black hover:text-white hover:shadow-2xl hover:shadow-black/20 hover:-translate-y-1 transition-all duration-300">
+            <div className="w-12 h-12 bg-black text-white group-hover:bg-white group-hover:text-black rounded-2xl flex items-center justify-center mb-6 shadow-lg transition-colors duration-300">
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
             </div>
-            <h3 className="text-3xl font-bold mb-3 tracking-tight group-hover:text-black">I Lost Something</h3>
-            <p className="text-gray-500 font-medium">Create a new semantic profile for your missing item. The AI will constantly scan new found items.</p>
-            <div className="mt-8 flex items-center text-sm font-bold uppercase tracking-widest text-black/50 group-hover:text-black transition-colors">
+            <h3 className="text-3xl font-bold mb-3 tracking-tight">I Lost Something</h3>
+            <p className="text-gray-500 group-hover:text-gray-300 font-medium transition-colors duration-300">Create a new semantic profile for your missing item. The AI will constantly scan new found items.</p>
+            <div className="mt-8 flex items-center text-sm font-bold uppercase tracking-widest text-black/50 group-hover:text-white/70 transition-colors duration-300">
               Report Lost Item &rarr;
             </div>
           </Link>
 
-          <Link href="/found" className="group block relative overflow-hidden rounded-3xl bg-black border border-black p-8 hover:shadow-2xl hover:shadow-black/20 hover:-translate-y-1 transition-all duration-300">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-gray-900 rounded-bl-[100px] -z-10 group-hover:bg-white transition-colors duration-500"></div>
-            <div className="w-12 h-12 bg-white text-black rounded-2xl flex items-center justify-center mb-6 shadow-lg">
+          <Link href="/found" className="group block relative overflow-hidden rounded-3xl bg-black border border-black p-8 hover:bg-white hover:shadow-2xl hover:shadow-black/20 hover:-translate-y-1 transition-all duration-300">
+            <div className="w-12 h-12 bg-white text-black group-hover:bg-black group-hover:text-white rounded-2xl flex items-center justify-center mb-6 shadow-lg transition-colors duration-300">
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
             </div>
-            <h3 className="text-3xl font-bold text-white mb-3 tracking-tight group-hover:text-black">I Found Something</h3>
-            <p className="text-gray-400 font-medium group-hover:text-gray-600 transition-colors">Upload a photo to instantly extract visual features and check against active missing item claims.</p>
-            <div className="mt-8 flex items-center text-sm font-bold uppercase tracking-widest text-white/50 group-hover:text-black transition-colors">
+            <h3 className="text-3xl font-bold text-white group-hover:text-black mb-3 tracking-tight transition-colors duration-300">I Found Something</h3>
+            <p className="text-gray-400 group-hover:text-gray-500 font-medium transition-colors duration-300">Upload a photo to instantly extract visual features and check against active missing item claims.</p>
+            <div className="mt-8 flex items-center text-sm font-bold uppercase tracking-widest text-white/50 group-hover:text-black/50 transition-colors duration-300">
               Report Found Item &rarr;
             </div>
           </Link>
