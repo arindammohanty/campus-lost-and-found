@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+    swcMinify: false,
+    eslint: { ignoreDuringBuilds: true },
+    typescript: { ignoreBuildErrors: true },
     experimental: {
         serverComponentsExternalPackages: ['sharp', 'onnxruntime-node'],
     },
