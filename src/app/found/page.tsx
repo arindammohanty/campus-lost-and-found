@@ -7,10 +7,11 @@ import Link from 'next/link'
 
 export default function FoundPage() {
   const supabase = createClient()
-  const { isReady, isModelLoading, loadingProgress, generateImageEmbedding } = useMultimodalModel()
+  const { isReady, isModelLoading, loadingProgress, generateTextEmbedding } = useMultimodalModel()
   
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
+  const [description, setDescription] = useState('')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [matches, setMatches] = useState<any[]>([])
@@ -32,7 +33,7 @@ export default function FoundPage() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
-    if (!file || !isReady) return
+    if (!file || !description || !isReady) return
 
     setLoading(true)
     setMessage('')
@@ -53,10 +54,9 @@ export default function FoundPage() {
       const { data } = supabase.storage.from('found_images').getPublicUrl(filePath)
       publicUrl = data.publicUrl
 
-      // Generate embedding 
-      // Transformers.js needs a real URL or an object URL
-      setMessage('Extracting Vision Features...')
-      const embeddingArray = await generateImageEmbedding(publicUrl)
+      // Generate embedding from text description instead of image to save processing time
+      setMessage('Generating Semantic Profile...')
+      const embeddingArray = await generateTextEmbedding(description)
       const embedding = Array.from(embeddingArray)
 
       // Try inserting
@@ -65,7 +65,8 @@ export default function FoundPage() {
         await supabase.from('found_items').insert({
           finder_id: user.id,
           image_url: publicUrl,
-          image_embedding: embedding,
+          description: description,
+          text_embedding: embedding,
         })
 
         const { data: matchData } = await supabase.rpc('match_lost_items', {
@@ -103,7 +104,7 @@ export default function FoundPage() {
         <div>
           <h1 className="text-5xl font-black tracking-tighter uppercase mb-4">Report Found</h1>
           <p className="text-sm font-bold uppercase mb-8 opacity-80">
-            Upload visual data. The engine will compute cross-modal similarities instantaneously.
+            Upload visual data and describe it. We use semantic text matching for speed, but the image proves validity.
           </p>
           
           <form onSubmit={handleSubmit} className="space-y-8">
@@ -121,12 +122,27 @@ export default function FoundPage() {
               />
             </div>
 
+            <div>
+              <label className="block text-xs font-black uppercase tracking-widest mb-3">
+                Item Description
+              </label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                required
+                rows={4}
+                placeholder="E.g. Black iPhone 13 with a cracked screen protector..."
+                className="w-full bg-white border-2 border-black p-4 text-sm font-bold uppercase placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-gray-200 transition-all resize-none"
+                disabled={loading}
+              />
+            </div>
+
             <button
               type="submit"
-              disabled={loading || !isReady || !file}
+              disabled={loading || !isReady || !file || !description}
               className="w-full border-2 border-black bg-black px-6 py-4 text-white text-lg font-black uppercase hover:bg-white hover:text-black transition-colors disabled:bg-gray-200 disabled:text-gray-400 disabled:border-gray-200 disabled:cursor-not-allowed"
             >
-              {loading ? 'Processing Image Array...' : !isReady ? (isModelLoading && loadingProgress ? `Downloading ${loadingProgress.file || 'AI Model'}... ${loadingProgress.progress ? Math.round(loadingProgress.progress) : 0}%` : 'Initializing AI Engine...') : 'Submit Visual Data'}
+              {loading ? 'Processing Data...' : !isReady ? (isModelLoading && loadingProgress ? `Downloading ${loadingProgress.file || 'AI Model'}... ${loadingProgress.progress ? Math.round(loadingProgress.progress) : 0}%` : 'Initializing AI Engine...') : 'Submit Data'}
             </button>
 
             {message && (

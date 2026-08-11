@@ -158,6 +158,7 @@ export default function MatchResults({
                 </div>
               </div>
               <div className="p-5 flex flex-col space-y-4">
+                <p className="font-bold text-sm uppercase">{match.description}</p>
                 <p className="text-xs font-bold uppercase text-gray-500">
                   Recovered {new Date(match.created_at).toLocaleDateString()}
                 </p>
