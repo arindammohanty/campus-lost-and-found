@@ -40,6 +40,9 @@ export function useMultimodalModel() {
             if (id !== undefined && promises.current[id]) {
               promises.current[id].reject(error)
               delete promises.current[id]
+            } else {
+              console.error('Worker Error:', error)
+              // We could also set some global error state here if needed
             }
             break
         }

@@ -10,20 +10,22 @@ class PipelineSingleton {
 
   static async getTextExtractor(progress_callback?: (msg: any) => void) {
     if (this.textExtractor === null) {
-      this.textExtractor = Promise.all([
-        AutoTokenizer.from_pretrained(this.model, { progress_callback }),
-        CLIPTextModelWithProjection.from_pretrained(this.model, { progress_callback, dtype: 'q8' })
-      ])
+      this.textExtractor = (async () => {
+        const tokenizer = await AutoTokenizer.from_pretrained(this.model, { progress_callback })
+        const model = await CLIPTextModelWithProjection.from_pretrained(this.model, { progress_callback, dtype: 'q8' })
+        return [tokenizer, model]
+      })()
     }
     return this.textExtractor
   }
 
   static async getImageExtractor(progress_callback?: (msg: any) => void) {
     if (this.imageExtractor === null) {
-      this.imageExtractor = Promise.all([
-        AutoProcessor.from_pretrained(this.model, { progress_callback }),
-        CLIPVisionModelWithProjection.from_pretrained(this.model, { progress_callback, dtype: 'q8' })
-      ])
+      this.imageExtractor = (async () => {
+        const processor = await AutoProcessor.from_pretrained(this.model, { progress_callback })
+        const model = await CLIPVisionModelWithProjection.from_pretrained(this.model, { progress_callback, dtype: 'q8' })
+        return [processor, model]
+      })()
     }
     return this.imageExtractor
   }
