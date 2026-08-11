@@ -126,7 +126,7 @@ export default function FoundPage() {
               disabled={loading || !isReady || !file}
               className="w-full border-2 border-black bg-black px-6 py-4 text-white text-lg font-black uppercase hover:bg-white hover:text-black transition-colors disabled:bg-gray-200 disabled:text-gray-400 disabled:border-gray-200 disabled:cursor-not-allowed"
             >
-              {loading ? 'Processing Image Array...' : !isReady ? (isModelLoading && loadingProgress ? `Downloading AI Model... ${loadingProgress.progress ? Math.round(loadingProgress.progress) : 0}%` : 'Initializing Transformers.js...') : 'Submit Visual Data'}
+              {loading ? 'Processing Image Array...' : !isReady ? (isModelLoading && loadingProgress ? `Downloading ${loadingProgress.file || 'AI Model'}... ${loadingProgress.progress ? Math.round(loadingProgress.progress) : 0}%` : 'Initializing AI Engine...') : 'Submit Visual Data'}
             </button>
 
             {message && (
