@@ -4,8 +4,10 @@ import { useState, FormEvent, useRef } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import { useMultimodalModel } from '@/hooks/useMultimodalModel'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 
 export default function FoundPage() {
+  const router = useRouter()
   const supabase = createClient()
   const { isReady, isModelLoading, loadingProgress, generateTextEmbedding } = useMultimodalModel()
   
@@ -67,12 +69,13 @@ export default function FoundPage() {
           text_embedding: embedding,
         })
 
-        setMessage('FOUND ITEM REGISTERED SUCCESSFULLY.')
-        // clear form
-        setFile(null)
-        setPreview(null)
-        setDescription('')
-        if (fileInputRef.current) fileInputRef.current.value = ''
+        setMessage('FOUND ITEM REGISTERED SUCCESSFULLY. REDIRECTING...')
+        
+        // Refresh Next.js client cache and redirect
+        router.refresh()
+        setTimeout(() => {
+          router.push('/dashboard')
+        }, 1500)
         
       } catch (dbErr: any) {
         setMessage(`ERROR SAVING TO DATABASE: ${dbErr.message}`)

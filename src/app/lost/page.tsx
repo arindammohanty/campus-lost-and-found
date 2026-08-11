@@ -40,6 +40,7 @@ export default function LostPage() {
       if (insertError) throw insertError
 
       setMessage('LISTING CREATED SUCCESSFULLY')
+      router.refresh()
       setTimeout(() => {
         router.push('/dashboard')
       }, 1500)
