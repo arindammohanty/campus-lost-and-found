@@ -42,20 +42,16 @@ export default function FoundPage() {
       const { data: { user }, error: userError } = await supabase.auth.getUser()
       if (userError || !user) throw new Error('User not authenticated')
 
-      // MOCK BACKEND LOGIC for demo purposes since real storage might fail
-      // Generate a mock URL if upload fails to allow the user to see the flow
-      let publicUrl = preview || ''
-      try {
-        const fileExt = file.name.split('.').pop()
-        const fileName = `${Math.random()}.${fileExt}`
-        const filePath = `${user.id}/${fileName}`
+      let publicUrl = ''
+      const fileExt = file.name.split('.').pop()
+      const fileName = `${Math.random()}.${fileExt}`
+      const filePath = `${user.id}/${fileName}`
 
-        await supabase.storage.from('found_images').upload(filePath, file)
-        const { data } = supabase.storage.from('found_images').getPublicUrl(filePath)
-        publicUrl = data.publicUrl
-      } catch (e) {
-        console.warn('Storage upload bypassed for demo mode.')
-      }
+      const { error: uploadError } = await supabase.storage.from('found_images').upload(filePath, file)
+      if (uploadError) throw new Error(`Image upload failed: ${uploadError.message}. Did you create the 'found_images' storage bucket?`)
+      
+      const { data } = supabase.storage.from('found_images').getPublicUrl(filePath)
+      publicUrl = data.publicUrl
 
       // Generate embedding 
       // Transformers.js needs a real URL or an object URL
