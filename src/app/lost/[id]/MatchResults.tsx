@@ -12,7 +12,11 @@ export default function MatchResults({
   const supabase = createClient()
   const { isReady, isModelLoading, loadingProgress, generateTextEmbedding } = useMultimodalModel()
 
-  const [embedding, setEmbedding] = useState<number[] | null>(lostItem.text_embedding)
+  // Detect dummy embedding
+  const isDummy = lostItem.text_embedding?.every(val => val === 0)
+  const initialEmbedding = isDummy ? null : lostItem.text_embedding
+
+  const [embedding, setEmbedding] = useState<number[] | null>(initialEmbedding)
   const [matches, setMatches] = useState<any[]>([])
   
   // Status states

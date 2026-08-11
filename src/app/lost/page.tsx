@@ -24,13 +24,17 @@ export default function LostPage() {
       const { data: { user }, error: userError } = await supabase.auth.getUser()
       if (userError || !user) throw new Error('User not authenticated')
 
+      // Create a dummy embedding of zeros to satisfy the DB constraint
+      // The real embedding will be generated on the Match Radar page
+      const dummyEmbedding = new Array(512).fill(0)
+
       // Will fail gracefully if DB isn't live
       const { error: insertError } = await supabase
         .from('lost_items')
         .insert({
           owner_id: user.id,
-          description
-          // text_embedding is now optional upon creation, will be generated upon scanning
+          description,
+          text_embedding: dummyEmbedding,
         })
 
       if (insertError) throw insertError
