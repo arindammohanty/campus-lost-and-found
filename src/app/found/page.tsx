@@ -5,6 +5,7 @@ import { createClient } from '@/utils/supabase/client'
 import { useMultimodalModel } from '@/hooks/useMultimodalModel'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { revalidateDashboard } from '@/app/actions'
 
 export default function FoundPage() {
   const router = useRouter()
@@ -62,16 +63,19 @@ export default function FoundPage() {
       // Try inserting
       setMessage('Cross-referencing database...')
       try {
-        await supabase.from('found_items').insert({
+        const { error: insertError } = await supabase.from('found_items').insert({
           finder_id: user.id,
           image_url: publicUrl,
           description: description,
           text_embedding: embedding,
         })
+        
+        if (insertError) throw insertError
 
         setMessage('FOUND ITEM REGISTERED SUCCESSFULLY. REDIRECTING...')
         
         // Refresh Next.js client cache and redirect
+        await revalidateDashboard()
         router.refresh()
         setTimeout(() => {
           router.push('/dashboard')

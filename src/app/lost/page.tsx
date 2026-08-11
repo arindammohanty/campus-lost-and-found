@@ -4,6 +4,7 @@ import { useState, FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 import Link from 'next/link'
+import { revalidateDashboard } from '@/app/actions'
 
 export default function LostPage() {
   const router = useRouter()
@@ -40,6 +41,7 @@ export default function LostPage() {
       if (insertError) throw insertError
 
       setMessage('LISTING CREATED SUCCESSFULLY')
+      await revalidateDashboard()
       router.refresh()
       setTimeout(() => {
         router.push('/dashboard')

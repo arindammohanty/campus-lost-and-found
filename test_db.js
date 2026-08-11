@@ -1,0 +1,21 @@
+import { createClient } from '@supabase/supabase-js'
+import dotenv from 'dotenv'
+
+dotenv.config({ path: '.env.local' })
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+)
+
+async function test() {
+  console.log("Checking found_items...")
+  const { data, error } = await supabase.from('found_items').select('*')
+  if (error) console.error("Error:", error)
+  else {
+    console.log("Found items count:", data.length)
+    console.log(data.map(d => ({ id: d.id, desc: d.description, finder_id: d.finder_id })))
+  }
+}
+
+test()
