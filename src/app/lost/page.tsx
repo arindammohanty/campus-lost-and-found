@@ -9,7 +9,7 @@ import Link from 'next/link'
 export default function LostPage() {
   const router = useRouter()
   const supabase = createClient()
-  const { isReady, generateTextEmbedding } = useMultimodalModel()
+  const { isReady, isModelLoading, loadingProgress, generateTextEmbedding } = useMultimodalModel()
   
   const [description, setDescription] = useState('')
   const [loading, setLoading] = useState(false)
@@ -87,7 +87,7 @@ export default function LostPage() {
             disabled={loading || !isReady || !description}
             className="w-full border-2 border-black bg-black px-6 py-4 text-white text-lg font-black uppercase hover:bg-white hover:text-black transition-colors disabled:bg-gray-200 disabled:text-gray-400 disabled:border-gray-200 disabled:cursor-not-allowed"
           >
-            {loading ? 'Processing Array...' : !isReady ? 'Initializing Transformers.js...' : 'Execute Semantic Search'}
+            {loading ? 'Processing Array...' : !isReady ? (isModelLoading && loadingProgress ? `Downloading AI Model... ${loadingProgress.progress ? Math.round(loadingProgress.progress) : 0}%` : 'Initializing Transformers.js...') : 'Execute Semantic Search'}
           </button>
 
           {message && (
