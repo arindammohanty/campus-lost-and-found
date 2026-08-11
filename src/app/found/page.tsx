@@ -59,6 +59,7 @@ export default function FoundPage() {
 
       // Try inserting
       setMessage('Cross-referencing database...')
+      try {
         await supabase.from('found_items').insert({
           finder_id: user.id,
           image_url: publicUrl,
