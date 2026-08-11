@@ -16,12 +16,30 @@ export default async function DashboardPage() {
 
   let lostItems: any[] = []
   let foundItems: any[] = []
+  let myClaims: any[] = []
+  let claimsOnMyItems: any[] = []
 
   try {
     const { data: lost } = await supabase.from('lost_items').select('*').eq('owner_id', user.id).order('created_at', { ascending: false })
     const { data: found } = await supabase.from('found_items').select('*').eq('finder_id', user.id).order('created_at', { ascending: false })
     if (lost) lostItems = lost
     if (found) foundItems = found
+
+    const foundItemIds = foundItems.map(i => i.id)
+    const orQuery = foundItemIds.length > 0 
+      ? `claimant_id.eq.${user.id},found_item_id.in.(${foundItemIds.join(',')})` 
+      : `claimant_id.eq.${user.id}`
+
+    const { data: claims } = await supabase
+      .from('claims')
+      .select('*, found_item:found_items(*), lost_item:lost_items(*)')
+      .or(orQuery)
+      .order('created_at', { ascending: false })
+
+    if (claims) {
+      myClaims = claims.filter(c => c.claimant_id === user.id)
+      claimsOnMyItems = claims.filter(c => foundItemIds.includes(c.found_item_id))
+    }
   } catch (e) {
     console.error('Failed to fetch dashboard data', e)
   }
@@ -143,6 +161,31 @@ export default async function DashboardPage() {
             )}
           </section>
 
+          {/* My Claims List (As Loser) */}
+          {myClaims.length > 0 && (
+            <div className="mt-8 space-y-4">
+              <h3 className="text-xl font-bold tracking-tight mb-4 border-b border-gray-200 pb-2">Claim Status</h3>
+              {myClaims.map(claim => (
+                <div key={claim.id} className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm relative overflow-hidden group">
+                   <div className={`absolute top-0 left-0 w-1 h-full transition-colors ${claim.status === 'accepted' ? 'bg-green-500' : 'bg-orange-500'}`}></div>
+                   <div className="flex flex-col space-y-2">
+                     <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Claim on Found Item: {claim.found_item_id.slice(0,8)}</span>
+                     <p className="font-semibold text-lg text-gray-900">
+                       {claim.status === 'pending' ? 'Waiting for finder to accept...' : 'Finder Accepted!'}
+                     </p>
+                     {claim.status === 'accepted' && claim.meetup_time && (
+                       <div className="bg-gray-100 p-4 rounded-xl border border-gray-200 mt-2">
+                         <p className="text-sm font-bold uppercase text-gray-500 mb-1">Meetup Details</p>
+                         <p className="text-md font-black text-black">{new Date(claim.meetup_time).toLocaleString()}</p>
+                         <p className="text-sm font-medium text-gray-700">Location: {claim.meetup_location}</p>
+                       </div>
+                     )}
+                   </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Found Items Dashboard */}
           <section className="space-y-6">
             <div className="flex items-center justify-between border-b border-gray-200 pb-4">
@@ -197,6 +240,75 @@ export default async function DashboardPage() {
             )}
           </section>
 
+          {/* Claims on My Found Items */}
+          {claimsOnMyItems.length > 0 && (
+            <div className="mt-8 space-y-4 col-span-1 lg:col-span-2">
+              <h3 className="text-xl font-bold tracking-tight mb-4 border-b border-gray-200 pb-2">Action Required: Meetup Scheduler</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {claimsOnMyItems.map(claim => (
+                  <div key={claim.id} className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm relative overflow-hidden group">
+                    <div className="flex flex-col space-y-4">
+                      <div className="flex justify-between items-start">
+                        <div>
+                           <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Claim on Your Item: {claim.found_item_id.slice(0,8)}</span>
+                           <p className="font-semibold text-md text-gray-900 mt-1">
+                             Someone claimed your found item!
+                           </p>
+                        </div>
+                        <span className={`px-2 py-1 text-[10px] font-bold uppercase tracking-widest rounded-md ${claim.status === 'accepted' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+                          {claim.status}
+                        </span>
+                      </div>
+                      
+                      {claim.status === 'pending' && (
+                        <form action={async (formData) => {
+                          'use server'
+                          const { createClient } = await import('@/utils/supabase/server')
+                          const supabase = createClient()
+                          const location = formData.get('location')
+                          const datetime = formData.get('datetime')
+                          await supabase.from('claims').update({
+                            status: 'accepted',
+                            meetup_location: location,
+                            meetup_time: datetime
+                          }).eq('id', claim.id)
+                        }} className="space-y-4 mt-4 bg-gray-50 p-4 rounded-xl border border-gray-200">
+                          <p className="text-xs font-bold uppercase tracking-widest mb-2">Schedule Meetup</p>
+                          
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">Location</label>
+                            <select name="location" required className="w-full bg-white border border-gray-300 p-2 text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-black">
+                              <option value="AryaBhatta">AryaBhatta</option>
+                              <option value="Kautlya">Kautlya</option>
+                              <option value="Madhusudan">Madhusudan</option>
+                              <option value="Main Gate">Main Gate</option>
+                            </select>
+                          </div>
+                          
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">Date & Time</label>
+                            <input type="datetime-local" name="datetime" required className="w-full bg-white border border-gray-300 p-2 text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-black" />
+                          </div>
+
+                          <button type="submit" className="w-full bg-black text-white text-sm font-bold uppercase py-3 rounded-lg hover:bg-gray-800 transition-colors">
+                            Accept & Schedule Meetup
+                          </button>
+                        </form>
+                      )}
+                      
+                      {claim.status === 'accepted' && claim.meetup_time && (
+                        <div className="bg-green-50 p-4 rounded-xl border border-green-200 mt-2">
+                           <p className="text-sm font-bold uppercase text-green-700 mb-1">Meetup Scheduled</p>
+                           <p className="text-md font-black text-green-900">{new Date(claim.meetup_time).toLocaleString()}</p>
+                           <p className="text-sm font-medium text-green-800">Location: {claim.meetup_location}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </main>
     </div>

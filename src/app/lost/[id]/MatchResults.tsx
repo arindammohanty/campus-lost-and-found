@@ -24,6 +24,28 @@ export default function MatchResults({
   const [generatingEmbedding, setGeneratingEmbedding] = useState(false)
   const [hasScanned, setHasScanned] = useState(false)
   const [error, setError] = useState('')
+  const [claimStatus, setClaimStatus] = useState<{[key: string]: 'idle' | 'claiming' | 'claimed'}>({})
+
+  const handleClaim = async (foundItemId: string) => {
+    setClaimStatus(prev => ({ ...prev, [foundItemId]: 'claiming' }))
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error("Not logged in")
+
+      const { error } = await supabase.from('claims').insert({
+        found_item_id: foundItemId,
+        lost_item_id: lostItem.id,
+        claimant_id: user.id
+      })
+      
+      if (error) throw error
+      setClaimStatus(prev => ({ ...prev, [foundItemId]: 'claimed' }))
+    } catch (e: any) {
+      console.error(e)
+      alert("Failed to submit claim: " + e.message)
+      setClaimStatus(prev => ({ ...prev, [foundItemId]: 'idle' }))
+    }
+  }
 
   const fetchMatches = async (queryEmbedding: number[]) => {
     setLoadingMatches(true)
@@ -162,8 +184,12 @@ export default function MatchResults({
                 <p className="text-xs font-bold uppercase text-gray-500">
                   Recovered {new Date(match.created_at).toLocaleDateString()}
                 </p>
-                <button className="w-full border-2 border-black bg-white px-4 py-3 text-sm font-black uppercase hover:bg-black hover:text-white transition-colors">
-                  Claim Identity
+                <button 
+                  onClick={() => handleClaim(match.id)}
+                  disabled={claimStatus[match.id] === 'claiming' || claimStatus[match.id] === 'claimed'}
+                  className="w-full border-2 border-black bg-white px-4 py-3 text-sm font-black uppercase hover:bg-black hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {claimStatus[match.id] === 'claiming' ? 'Submitting...' : claimStatus[match.id] === 'claimed' ? 'Claim Submitted' : 'Claim Identity'}
                 </button>
               </div>
             </div>

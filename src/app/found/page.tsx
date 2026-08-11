@@ -14,7 +14,6 @@ export default function FoundPage() {
   const [description, setDescription] = useState('')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
-  const [matches, setMatches] = useState<any[]>([])
   
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -37,7 +36,6 @@ export default function FoundPage() {
 
     setLoading(true)
     setMessage('')
-    setMatches([])
 
     try {
       const { data: { user }, error: userError } = await supabase.auth.getUser()
@@ -61,7 +59,6 @@ export default function FoundPage() {
 
       // Try inserting
       setMessage('Cross-referencing database...')
-      try {
         await supabase.from('found_items').insert({
           finder_id: user.id,
           image_url: publicUrl,
@@ -69,18 +66,13 @@ export default function FoundPage() {
           text_embedding: embedding,
         })
 
-        const { data: matchData } = await supabase.rpc('match_lost_items', {
-          query_embedding: embedding,
-          match_threshold: 0.75,
-          match_count: 5
-        })
-
-        if (matchData && matchData.length > 0) {
-          setMatches(matchData)
-          setMessage('FOUND ITEM REGISTERED. POTENTIAL MATCHES LOCATED.')
-        } else {
-          setMessage('FOUND ITEM REGISTERED. NO IMMEDIATE MATCHES.')
-        }
+        setMessage('FOUND ITEM REGISTERED SUCCESSFULLY.')
+        // clear form
+        setFile(null)
+        setPreview(null)
+        setDescription('')
+        if (fileInputRef.current) fileInputRef.current.value = ''
+        
       } catch (dbErr: any) {
         setMessage(`ERROR SAVING TO DATABASE: ${dbErr.message}`)
       }
@@ -142,7 +134,7 @@ export default function FoundPage() {
               disabled={loading || !isReady || !file || !description}
               className="w-full border-2 border-black bg-black px-6 py-4 text-white text-lg font-black uppercase hover:bg-white hover:text-black transition-colors disabled:bg-gray-200 disabled:text-gray-400 disabled:border-gray-200 disabled:cursor-not-allowed"
             >
-              {loading ? 'Processing Data...' : !isReady ? (isModelLoading && loadingProgress ? `Downloading ${loadingProgress.file || 'AI Model'}... ${loadingProgress.progress ? Math.round(loadingProgress.progress) : 0}%` : 'Initializing AI Engine...') : 'Submit Data'}
+              {loading ? 'Processing Data...' : !isReady ? (isModelLoading && loadingProgress ? `Downloading ${loadingProgress.file || 'AI Model'}... ${loadingProgress.progress ? Math.round(loadingProgress.progress) : 0}%` : 'Initializing AI Engine...') : 'Submit Record'}
             </button>
 
             {message && (
@@ -162,22 +154,6 @@ export default function FoundPage() {
             )}
           </div>
 
-          {matches.length > 0 && (
-            <div className="border-t-2 border-black pt-8">
-              <h2 className="text-xl font-black uppercase mb-4">Correlated Data</h2>
-              <div className="space-y-4">
-                {matches.map((match) => (
-                  <div key={match.id} className="border-2 border-black p-4">
-                    <p className="font-bold text-sm uppercase">{match.description}</p>
-                    <div className="mt-3 flex justify-between items-center border-t border-black pt-2">
-                      <p className="text-xs font-bold uppercase">Accuracy</p>
-                      <p className="text-xs font-black bg-black text-white px-2 py-1">{(match.similarity * 100).toFixed(1)}%</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>
