@@ -18,6 +18,10 @@ export default async function DashboardPage() {
   let foundItems: any[] = []
   let myClaims: any[] = []
   let claimsOnMyItems: any[] = []
+  
+  // Community Feed
+  let allLost: any[] = []
+  let allFound: any[] = []
 
   try {
     const { data: lost } = await supabase.from('lost_items').select('*').eq('owner_id', user.id).order('created_at', { ascending: false })
@@ -40,6 +44,12 @@ export default async function DashboardPage() {
       myClaims = claims.filter(c => c.claimant_id === user.id)
       claimsOnMyItems = claims.filter(c => foundItemIds.includes(c.found_item_id))
     }
+
+    const { data: lostAll } = await supabase.from('lost_items').select('*').order('created_at', { ascending: false }).limit(20)
+    const { data: foundAll } = await supabase.from('found_items').select('*').order('created_at', { ascending: false }).limit(20)
+    if (lostAll) allLost = lostAll
+    if (foundAll) allFound = foundAll
+
   } catch (e) {
     console.error('Failed to fetch dashboard data', e)
   }
@@ -59,9 +69,18 @@ export default async function DashboardPage() {
           </div>
           <div className="flex items-center space-x-6">
             <div className="text-sm font-medium text-gray-500 hidden md:block">{user.email}</div>
-            <Link href="/login" className="text-sm font-bold bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-full transition-colors">
-              Sign Out
-            </Link>
+            <form action={async () => {
+              'use server'
+              const { createClient } = await import('@/utils/supabase/server')
+              const supabase = createClient()
+              await supabase.auth.signOut()
+              const { redirect } = await import('next/navigation')
+              redirect('/login')
+            }}>
+              <button type="submit" className="text-sm font-bold bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-full transition-colors">
+                Sign Out
+              </button>
+            </form>
           </div>
         </div>
       </nav>
@@ -310,6 +329,65 @@ export default async function DashboardPage() {
             </div>
           )}
         </div>
+
+        {/* Community Board */}
+        <section className="mt-20">
+          <header className="mb-10 text-center">
+            <h2 className="text-3xl font-black tracking-tight mb-2">Campus Community Board</h2>
+            <p className="text-gray-500 text-sm">Recent lost and found reports from around the campus.</p>
+          </header>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+            
+            {/* All Lost */}
+            <div>
+              <h3 className="text-lg font-bold tracking-tight mb-6 flex items-center">
+                <span className="w-2 h-2 rounded-full bg-red-500 mr-2"></span>
+                Recently Lost
+              </h3>
+              <div className="space-y-3">
+                {allLost.map(item => (
+                  <div key={item.id} className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm flex items-start space-x-4">
+                    <div className="flex-1">
+                      <p className="font-semibold text-sm text-gray-900 leading-snug">{item.description}</p>
+                      <p className="text-xs text-gray-400 font-medium mt-2">{new Date(item.created_at).toLocaleDateString()}</p>
+                    </div>
+                    <span className={`px-2 py-1 text-[10px] font-bold uppercase tracking-widest rounded-md ${item.resolved ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+                      {item.resolved ? 'Resolved' : 'Searching'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* All Found */}
+            <div>
+              <h3 className="text-lg font-bold tracking-tight mb-6 flex items-center">
+                <span className="w-2 h-2 rounded-full bg-blue-500 mr-2"></span>
+                Recently Found
+              </h3>
+              <div className="grid grid-cols-2 gap-3">
+                {allFound.map(item => (
+                  <div key={item.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm relative">
+                    <div className="aspect-square bg-gray-100 relative">
+                      <img src={item.image_url} className="w-full h-full object-cover" alt="Found item" />
+                      <div className="absolute top-2 right-2">
+                        <span className={`px-2 py-1 text-[8px] font-bold uppercase tracking-widest rounded-md shadow-sm backdrop-blur-md ${item.resolved ? 'bg-green-500/90 text-white' : 'bg-white/90 text-black'}`}>
+                          {item.resolved ? 'Claimed' : 'Unclaimed'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="p-3">
+                      <p className="font-semibold text-xs text-gray-900 truncate">{item.description}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+          </div>
+        </section>
+
       </main>
     </div>
   )
