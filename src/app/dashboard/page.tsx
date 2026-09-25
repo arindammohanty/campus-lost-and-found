@@ -160,8 +160,10 @@ export default async function DashboardPage() {
                         <form action={async () => {
                           'use server'
                           const { createClient } = await import('@/utils/supabase/server')
+                          const { revalidatePath } = await import('next/cache')
                           const supabase = createClient()
                           await supabase.from('lost_items').update({ resolved: true }).eq('id', item.id)
+                          revalidatePath('/dashboard')
                         }}>
                           <button type="submit" className="px-4 py-2.5 rounded-xl text-sm font-bold text-gray-600 bg-gray-100 hover:bg-green-100 hover:text-green-700 transition-colors">
                             Mark Found
@@ -239,8 +241,10 @@ export default async function DashboardPage() {
                         <form action={async () => {
                           'use server'
                           const { createClient } = await import('@/utils/supabase/server')
+                          const { revalidatePath } = await import('next/cache')
                           const supabase = createClient()
                           await supabase.from('found_items').update({ resolved: true }).eq('id', item.id)
+                          revalidatePath('/dashboard')
                         }} className="mt-2">
                           <button type="submit" className="w-full py-2 bg-gray-50 hover:bg-green-50 text-gray-600 hover:text-green-600 text-xs font-bold rounded-lg transition-colors border border-gray-200 hover:border-green-200">
                             Mark as Claimed
@@ -286,6 +290,7 @@ export default async function DashboardPage() {
                         <form action={async (formData) => {
                           'use server'
                           const { createClient } = await import('@/utils/supabase/server')
+                          const { revalidatePath } = await import('next/cache')
                           const supabase = createClient()
                           const location = formData.get('location')
                           const datetime = formData.get('datetime')
@@ -294,6 +299,7 @@ export default async function DashboardPage() {
                             meetup_location: location,
                             meetup_time: datetime
                           }).eq('id', claim.id)
+                          revalidatePath('/dashboard')
                         }} className="space-y-4 mt-4 bg-gray-50 p-4 rounded-xl border border-gray-200">
                           <p className="text-xs font-bold uppercase tracking-widest mb-2">Schedule Meetup</p>
                           

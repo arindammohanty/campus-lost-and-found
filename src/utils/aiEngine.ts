@@ -39,8 +39,9 @@ export function extractAIFeatures(title: string, description: string, imageTextH
   const detectedBrand = brands.find(b => new RegExp(`\\b${b}\\b`, 'i').test(combined)) || '';
 
   // 4. Generate Semantic Tags with Unicode awareness
+  const unicodePunctuationRegex = new RegExp('[^\\p{L}\\p{N}\\s]', 'gu');
   const words = combined
-    .replace(/[^\p{L}\p{N}\s]/gu, '')
+    .replace(unicodePunctuationRegex, '')
     .split(/\s+/)
     .filter(w => w.length > 2 && !['the', 'and', 'with', 'for', 'this', 'that', 'from', 'item', 'lost', 'found'].includes(w.toLowerCase()));
   const uniqueTags = Array.from(new Set(words)).slice(0, 6);
@@ -150,18 +151,20 @@ export function calculateMatchScore(lostItem: Item, foundItem: Item): { score: n
   }
 
   // Visual CLIP similarity bonus if vectors exist
-  let visualSim = 0.85;
+  let visualSim: number = 0;
   if (lostItem.aiEmbedding && foundItem.aiEmbedding) {
     visualSim = cosineSimilarity(lostItem.aiEmbedding, foundItem.aiEmbedding);
-    if (visualSim > 0.80) {
-      reasons.push(`CLIP Visual Embedding Cosine Similarity: ${(visualSim * 100).toFixed(1)}%`);
+    if (visualSim > 0.50) {
+      const visualBonus = Math.round(visualSim * 25);
+      score += visualBonus;
+      reasons.push(`CLIP Visual Embedding Similarity: ${(visualSim * 100).toFixed(1)}% (+${visualBonus}%)`);
     }
   }
 
   return {
     score: Math.min(100, Math.round(score)),
     reasons,
-    similarity: visualSim,
+    similarity: visualSim || 0.85,
   };
 }
 
