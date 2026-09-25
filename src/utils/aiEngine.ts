@@ -38,19 +38,21 @@ export function extractAIFeatures(title: string, description: string, imageTextH
   const brands = ['casio', 'apple', 'dell', 'hp', 'lenovo', 'samsung', 'boat', 'sony', 'milton', 'wildcraft', 'nike', 'adidas', 'fastrack', 'noise', 'titan', 'godrej'];
   const detectedBrand = brands.find(b => new RegExp(`\\b${b}\\b`, 'i').test(combined)) || '';
 
-  // 4. Generate Semantic Tags
+  // 4. Generate Semantic Tags with Unicode awareness
   const words = combined
-    .replace(/[^\w\s]/g, '')
+    .replace(/[^\p{L}\p{N}\s]/gu, '')
     .split(/\s+/)
-    .filter(w => w.length > 2 && !['the', 'and', 'with', 'for', 'this', 'that', 'from', 'item', 'lost', 'found'].includes(w));
+    .filter(w => w.length > 2 && !['the', 'and', 'with', 'for', 'this', 'that', 'from', 'item', 'lost', 'found'].includes(w.toLowerCase()));
   const uniqueTags = Array.from(new Set(words)).slice(0, 6);
+
+  const confidence = combined.trim().length === 0 ? 0 : 0.95;
 
   return {
     category: detectedCategory,
     color: detectedColor ? detectedColor.charAt(0).toUpperCase() + detectedColor.slice(1) : '',
     brand: detectedBrand ? detectedBrand.toUpperCase() : '',
     tags: uniqueTags,
-    confidence: 0.92 + Math.random() * 0.07,
+    confidence,
   };
 }
 

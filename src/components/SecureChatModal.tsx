@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Item, User, ChatMessage } from '../types/portal';
-import { getChatMessages, sendChatMessage } from '../utils/portalStorage';
+import { getChatMessages, sendChatMessage, getChatThreadsForItem } from '../utils/portalStorage';
 import {
   X,
   Send,
@@ -13,6 +13,7 @@ import {
   Building,
   CheckCircle,
   HelpCircle,
+  Users,
 } from 'lucide-react';
 
 interface SecureChatModalProps {
@@ -33,9 +34,16 @@ export const SecureChatModal: React.FC<SecureChatModalProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const isOwner = item.userId === currentUser.id;
-  const claimantId = currentUser.role === 'helpdesk_admin' || isOwner ? undefined : currentUser.id;
+  const isOfficer = currentUser.role === 'helpdesk_admin';
+  const isPrivileged = isOwner || isOfficer;
+
+  const [availableThreads, setAvailableThreads] = useState<{ claimantId: string; claimantName?: string }[]>([]);
+  const [activeClaimantId, setActiveClaimantId] = useState<string | undefined>(
+    !isPrivileged ? currentUser.id : undefined
+  );
+
   const role: 'finder' | 'owner' | 'helpdesk' =
-    currentUser.role === 'helpdesk_admin'
+    isOfficer
       ? 'helpdesk'
       : item.type === 'Found'
       ? isOwner
@@ -46,25 +54,41 @@ export const SecureChatModal: React.FC<SecureChatModalProps> = ({
       : 'finder';
 
   const loadMessages = () => {
-    const list = getChatMessages(item.id, claimantId);
-    setMessages(list);
+    if (isPrivileged) {
+      const threads = getChatThreadsForItem(item.id);
+      setAvailableThreads(threads);
+      const currentTarget = activeClaimantId || (threads.length > 0 ? threads[0].claimantId : undefined);
+      if (currentTarget && !activeClaimantId) {
+        setActiveClaimantId(currentTarget);
+      }
+      const list = getChatMessages(item.id, currentTarget);
+      setMessages(list);
+    } else {
+      const list = getChatMessages(item.id, currentUser.id);
+      setMessages(list);
+    }
   };
 
   useEffect(() => {
     loadMessages();
     const interval = setInterval(loadMessages, 3000);
     return () => clearInterval(interval);
-  }, [item.id, claimantId]);
+  }, [item.id, activeClaimantId]);
 
+  const prevCountRef = useRef(0);
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    if (messages.length > prevCountRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+    prevCountRef.current = messages.length;
+  }, [messages.length]);
 
   const handleSend = (textToSend?: string) => {
     const text = textToSend || inputText;
     if (!text.trim()) return;
 
-    sendChatMessage(item.id, currentUser, role, text, claimantId);
+    const targetClaimant = !isPrivileged ? currentUser.id : activeClaimantId;
+    sendChatMessage(item.id, currentUser, role, text, targetClaimant);
     setInputText('');
     loadMessages();
   };
@@ -130,6 +154,28 @@ export const SecureChatModal: React.FC<SecureChatModalProps> = ({
           </div>
           <span className="text-indigo-600 font-semibold hidden sm:inline">Handover via Campus Help Desk</span>
         </div>
+
+        {/* Thread selector bar for item owners and Help Desk officers */}
+        {isPrivileged && availableThreads.length > 0 && (
+          <div className="bg-indigo-50/50 border-b border-indigo-100 px-6 py-1.5 flex items-center gap-2 overflow-x-auto shrink-0 text-xs">
+            <span className="text-[10px] font-bold text-indigo-900 uppercase tracking-wider shrink-0 flex items-center gap-1">
+              <Users className="w-3 h-3 text-indigo-600" /> Thread:
+            </span>
+            {availableThreads.map((t) => (
+              <button
+                key={t.claimantId}
+                onClick={() => setActiveClaimantId(t.claimantId)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                  activeClaimantId === t.claimantId
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                {t.claimantName || `Student #${t.claimantId.slice(-4)}`}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Chat Messages List */}
         <div className="flex-1 p-6 overflow-y-auto space-y-3 bg-[#f8fafc]">

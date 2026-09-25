@@ -102,6 +102,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
   const [imageUrl, setImageUrl] = useState('');
   const [isAiAnalyzing, setIsAiAnalyzing] = useState(false);
   const [currentCustody, setCurrentCustody] = useState<'In Personal Custody' | 'Deposited at Campus Help Desk'>('Deposited at Campus Help Desk');
+  const [error, setError] = useState<string>('');
   const modalScrollRef = React.useRef<HTMLFormElement>(null);
 
   // Handle local file upload with client-side canvas compression to prevent localStorage quota exhaustion

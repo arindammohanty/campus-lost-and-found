@@ -78,6 +78,7 @@ export function initializePortalStorage(): void {
       {
         id: 'msg-2',
         itemId: 'item-lost-1',
+        threadId: 'item-lost-1_user-amrit',
         senderId: 'user-amrit',
         senderName: 'Finder (Amrit Rout)',
         senderRole: 'finder',
@@ -87,6 +88,7 @@ export function initializePortalStorage(): void {
       {
         id: 'msg-3',
         itemId: 'item-lost-1',
+        threadId: 'item-lost-1_user-amrit',
         senderId: 'user-arindam',
         senderName: 'Owner (Arindam Mohanty)',
         senderRole: 'owner',
@@ -290,7 +292,11 @@ export function getPortalUsers(): User[] {
 }
 
 export function getActiveUser(): User {
-  return readStorage<User>(STORAGE_KEYS.CURRENT_USER, SAMPLE_USERS[0]);
+  const user = readStorage<User | null>(STORAGE_KEYS.CURRENT_USER, null);
+  if (!user || !user.id || !user.name) {
+    return SAMPLE_USERS[0];
+  }
+  return user;
 }
 
 export function setActiveUser(user: User): void {
@@ -344,11 +350,23 @@ export function createHandoverTicket(
   return newTicket;
 }
 
+const clientDeskLockouts = new Map<string, { attempts: number; lockedUntil?: number }>();
+
 export function verifyHandoverAtDesk(
   ticketIdOrItemId: string,
   enteredCode: string,
   officerName: string
 ): { success: boolean; message: string; ticket?: HandoverTicket } {
+  const now = Date.now();
+  let lockout = clientDeskLockouts.get(ticketIdOrItemId);
+  if (lockout && lockout.lockedUntil && now < lockout.lockedUntil) {
+    const minsLeft = Math.ceil((lockout.lockedUntil - now) / 60000);
+    return { success: false, message: `Ticket is locked due to too many failed attempts. Try again in ${minsLeft} minute(s).` };
+  } else if (lockout && lockout.lockedUntil && now >= lockout.lockedUntil) {
+    lockout.attempts = 0;
+    lockout.lockedUntil = undefined;
+  }
+
   const tickets = getHandoverTickets();
   const ticketIndex = tickets.findIndex(t => t.id === ticketIdOrItemId || t.itemId === ticketIdOrItemId);
   let ticket = ticketIndex !== -1 ? tickets[ticketIndex] : undefined;
@@ -362,8 +380,19 @@ export function verifyHandoverAtDesk(
   }
 
   if (validPin.trim() !== enteredCode.trim()) {
-    return { success: false, message: 'Invalid 6-digit security handover code.' };
+    if (!lockout) lockout = { attempts: 0 };
+    lockout.attempts += 1;
+    if (lockout.attempts >= 5) {
+      lockout.lockedUntil = now + 15 * 60 * 1000;
+      clientDeskLockouts.set(ticketIdOrItemId, lockout);
+      return { success: false, message: 'Too many incorrect attempts. Ticket locked for 15 minutes.' };
+    }
+    clientDeskLockouts.set(ticketIdOrItemId, lockout);
+    return { success: false, message: `Invalid 6-digit security handover code. (${5 - lockout.attempts} attempts remaining)` };
   }
+
+  // Clear attempts on success
+  clientDeskLockouts.delete(ticketIdOrItemId);
 
   if (ticket) {
     ticket.status = 'Completed';
@@ -386,13 +415,31 @@ export function verifyHandoverAtDesk(
 
 // ----------------- SECURE CHAT -----------------
 
+export function getChatThreadsForItem(itemId: string): { claimantId: string; claimantName?: string }[] {
+  const allMessages = readStorage<ChatMessage[]>(STORAGE_KEYS.MESSAGES, []);
+  const threadMap = new Map<string, { claimantId: string; claimantName?: string }>();
+  for (const m of allMessages) {
+    if (m.itemId === itemId && m.threadId && m.threadId.startsWith(`${itemId}_`)) {
+      const cId = m.threadId.replace(`${itemId}_`, '');
+      if (!threadMap.has(cId)) {
+        threadMap.set(cId, {
+          claimantId: cId,
+          claimantName: m.senderId === cId ? m.senderName : undefined,
+        });
+      }
+    }
+  }
+  return Array.from(threadMap.values());
+}
+
 export function getChatMessages(itemId: string, claimantId?: string): ChatMessage[] {
   const allMessages = readStorage<ChatMessage[]>(STORAGE_KEYS.MESSAGES, []);
   return allMessages.filter(m => {
     if (m.itemId !== itemId) return false;
     // If claimantId is specified, isolate to that claimant's thread or system messages
-    if (claimantId && m.threadId) {
-      return m.threadId === `${itemId}_${claimantId}` || m.isSystem;
+    if (claimantId) {
+      if (m.isSystem) return true;
+      return m.threadId === `${itemId}_${claimantId}`;
     }
     return true;
   });

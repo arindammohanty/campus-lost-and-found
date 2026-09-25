@@ -54,9 +54,12 @@ export const HandoverModal: React.FC<HandoverModalProps> = ({
   const [copied, setCopied] = useState(false);
 
   const isFinderDepositing = item.type === 'Found' && currentUser.id === item.userId;
-  const currentPin = ticket?.handoverCode || item.handoverCode || '482910';
+  const isOwner = currentUser.id === item.userId;
+  const isAuthorizedToViewPass = isHelpDeskOfficer || isOwner || (ticket && ticket.claimantId === currentUser.id);
+  const currentPin = isAuthorizedToViewPass ? (ticket?.handoverCode || item.handoverCode || '482910') : '••••••';
 
   const handleCopyPin = () => {
+    if (!isAuthorizedToViewPass) return;
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       navigator.clipboard.writeText(currentPin);
       setCopied(true);
@@ -64,16 +67,18 @@ export const HandoverModal: React.FC<HandoverModalProps> = ({
     }
   };
 
-  // Check if a ticket already exists for this item
+  // Check if a ticket already exists for this item belonging to the current user (or any if officer)
   useEffect(() => {
-    const existing = getHandoverTickets().find((t) => t.itemId === item.id);
+    const existing = getHandoverTickets().find(
+      (t) => t.itemId === item.id && (isHelpDeskOfficer || t.claimantId === currentUser.id)
+    );
     if (existing) {
       setTicket(existing);
       generateQRCode(existing.handoverCode);
-    } else {
+    } else if (isOwner || isHelpDeskOfficer) {
       generateQRCode(item.handoverCode || '482910');
     }
-  }, [item.id, item.handoverCode]);
+  }, [item.id, item.handoverCode, currentUser.id, isHelpDeskOfficer, isOwner]);
 
   const generateQRCode = async (code: string) => {
     try {
@@ -110,6 +115,10 @@ export const HandoverModal: React.FC<HandoverModalProps> = ({
 
   const handleOfficerVerification = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isHelpDeskOfficer) {
+      setMessage({ text: 'Access denied: Only authorized Help Desk officers may verify handovers.', type: 'error' });
+      return;
+    }
     if (!inputCode.trim()) {
       setMessage({ text: 'Please enter the 6-digit student handover code.', type: 'error' });
       return;
@@ -163,16 +172,18 @@ export const HandoverModal: React.FC<HandoverModalProps> = ({
                 activeTab === 'pass' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600'
               }`}
             >
-              📱 Student Handover Pass
+              📱 {isAuthorizedToViewPass ? 'Student Handover Pass' : 'Claim & Verify'}
             </button>
-            <button
-              onClick={() => setActiveTab('verify')}
-              className={`px-3.5 py-1.5 rounded-lg transition-all ${
-                activeTab === 'verify' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600'
-              }`}
-            >
-              👮 Officer Verification Desk
-            </button>
+            {isHelpDeskOfficer && (
+              <button
+                onClick={() => setActiveTab('verify')}
+                className={`px-3.5 py-1.5 rounded-lg transition-all ${
+                  activeTab === 'verify' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600'
+                }`}
+              >
+                👮 Officer Verification Desk
+              </button>
+            )}
           </div>
           <span className="text-[11px] text-slate-500 font-mono">Item #{item.id.slice(-6)}</span>
         </div>
@@ -198,65 +209,80 @@ export const HandoverModal: React.FC<HandoverModalProps> = ({
 
           {activeTab === 'pass' ? (
             <div className="space-y-4">
-              {/* Official Handover Pass Card */}
-              <div className="bg-gradient-to-br from-indigo-900 via-slate-900 to-indigo-950 text-white rounded-3xl p-6 shadow-xl relative overflow-hidden text-center">
-                <div className="absolute top-0 right-0 p-4 opacity-10">
-                  <ShieldCheck className="w-32 h-32" />
-                </div>
+              {/* If user is authorized to view pass (owner, officer, or claimant with ticket) */}
+              {isAuthorizedToViewPass ? (
+                /* Official Handover Pass Card */
+                <div className="bg-gradient-to-br from-indigo-900 via-slate-900 to-indigo-950 text-white rounded-3xl p-6 shadow-xl relative overflow-hidden text-center">
+                  <div className="absolute top-0 right-0 p-4 opacity-10">
+                    <ShieldCheck className="w-32 h-32" />
+                  </div>
 
-                <div className="flex items-center justify-center gap-2 mb-3">
-                  <span className="inline-block bg-indigo-500/30 text-indigo-300 font-mono text-[10px] uppercase font-bold tracking-widest px-3 py-1 rounded-full border border-indigo-400/30">
-                    {isFinderDepositing ? '📦 Finder Custody Deposit Pass' : '🎯 Verified Campus Handover Pass'}
-                  </span>
-                </div>
-
-                <h4 className="text-xl font-black tracking-tight">{item.title}</h4>
-                <p className="text-xs text-slate-300 mt-1">
-                  Designated Counter: <span className="font-semibold text-white">{ticket?.helpDeskLocation || selectedDesk}</span>
-                </p>
-
-                {/* QR Code and 6-Digit Code */}
-                <div className="my-5 flex flex-col items-center justify-center">
-                  {qrCodeDataUrl ? (
-                    <div className="bg-white p-2.5 rounded-2xl shadow-lg inline-block border-4 border-indigo-300/40">
-                      <img
-                        src={qrCodeDataUrl}
-                        alt="Handover QR Code"
-                        className="w-36 h-36 object-contain"
-                      />
-                    </div>
-                  ) : (
-                    <div className="w-36 h-36 bg-slate-800 rounded-2xl animate-pulse flex items-center justify-center">
-                      <QrCode className="w-8 h-8 text-slate-500" />
-                    </div>
-                  )}
-
-                  <div className="mt-4 flex flex-col items-center">
-                    <span className="text-[11px] uppercase tracking-widest text-slate-400 font-bold block mb-1">
-                      6-Digit Security Handover PIN
+                  <div className="flex items-center justify-center gap-2 mb-3">
+                    <span className="inline-block bg-indigo-500/30 text-indigo-300 font-mono text-[10px] uppercase font-bold tracking-widest px-3 py-1 rounded-full border border-indigo-400/30">
+                      {isFinderDepositing ? '📦 Finder Custody Deposit Pass' : '🎯 Verified Campus Handover Pass'}
                     </span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-3xl font-black font-mono tracking-widest text-amber-400 bg-white/5 px-4 py-1 rounded-xl border border-white/10">
-                        {currentPin}
+                  </div>
+
+                  <h4 className="text-xl font-black tracking-tight">{item.title}</h4>
+                  <p className="text-xs text-slate-300 mt-1">
+                    Designated Counter: <span className="font-semibold text-white">{ticket?.helpDeskLocation || selectedDesk}</span>
+                  </p>
+
+                  {/* QR Code and 6-Digit Code */}
+                  <div className="my-5 flex flex-col items-center justify-center">
+                    {qrCodeDataUrl ? (
+                      <div className="bg-white p-2.5 rounded-2xl shadow-lg inline-block border-4 border-indigo-300/40">
+                        <img
+                          src={qrCodeDataUrl}
+                          alt="Handover QR Code"
+                          className="w-36 h-36 object-contain"
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-36 h-36 bg-slate-800 rounded-2xl animate-pulse flex items-center justify-center">
+                        <QrCode className="w-8 h-8 text-slate-500" />
+                      </div>
+                    )}
+
+                    <div className="mt-4 flex flex-col items-center">
+                      <span className="text-[11px] uppercase tracking-widest text-slate-400 font-bold block mb-1">
+                        6-Digit Security Handover PIN
                       </span>
-                      <button
-                        type="button"
-                        onClick={handleCopyPin}
-                        className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white transition-colors text-xs font-semibold flex items-center gap-1"
-                        title="Copy PIN"
-                      >
-                        {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Download className="w-4 h-4" />}
-                        <span className="text-[10px]">{copied ? 'Copied!' : 'Copy'}</span>
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <span className="text-3xl font-black font-mono tracking-widest text-amber-400 bg-white/5 px-4 py-1 rounded-xl border border-white/10">
+                          {currentPin}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={handleCopyPin}
+                          className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white transition-colors text-xs font-semibold flex items-center gap-1"
+                          title="Copy PIN"
+                        >
+                          {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Download className="w-4 h-4" />}
+                          <span className="text-[10px]">{copied ? 'Copied!' : 'Copy'}</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="text-[11px] text-slate-300 border-t border-slate-700/60 pt-3">
-                  {isFinderDepositing ? 'Depositing Finder' : 'Claimant'}: <strong className="text-white">{currentUser.name}</strong> • Roll:{' '}
-                  <span className="font-mono text-indigo-300">{currentUser.rollNumber}</span>
+                  <div className="text-[11px] text-slate-300 border-t border-slate-700/60 pt-3">
+                    {isFinderDepositing ? 'Depositing Finder' : 'Claimant'}: <strong className="text-white">{currentUser.name}</strong> • Roll:{' '}
+                    <span className="font-mono text-indigo-300">{currentUser.rollNumber}</span>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                /* Ownership Claim verification required before revealing pass */
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 text-center space-y-2">
+                  <div className="w-10 h-10 bg-indigo-50 border border-indigo-100 rounded-xl flex items-center justify-center text-indigo-600 mx-auto">
+                    <Lock className="w-5 h-5" />
+                  </div>
+                  <h4 className="font-bold text-slate-900 text-sm">Ownership Verification Required</h4>
+                  <p className="text-xs text-slate-600 max-w-sm mx-auto">
+                    To protect student belongings, 6-digit Handover PINs and QR codes are kept confidential.
+                    Please describe your secret distinguishing detail below to generate an official Handover Pass.
+                  </p>
+                </div>
+              )}
 
               {/* Secret Details Proof input if not created yet */}
               {!ticket && (

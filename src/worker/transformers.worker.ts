@@ -54,7 +54,7 @@ self.addEventListener('message', async (event: MessageEvent) => {
   }
 
   try {
-    let embedding;
+    let embedding: number[] = [];
 
     if (type === 'text') {
       const [tokenizer, model] = await PipelineSingleton.getTextExtractor((x) => {

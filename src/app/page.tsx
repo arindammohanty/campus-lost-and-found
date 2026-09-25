@@ -592,7 +592,9 @@ export default function Home() {
               </div>
 
               <div className="text-right">
-                <span className="text-xs text-slate-400 block font-medium">Logged in as Officer:</span>
+                <span className="text-xs text-slate-400 block font-medium">
+                  Logged in as {currentUser.role === 'helpdesk_admin' ? 'Officer' : 'Student'}:
+                </span>
                 <span className="text-sm font-bold text-amber-400">{currentUser.name}</span>
               </div>
             </div>
@@ -657,7 +659,11 @@ export default function Home() {
                             className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-xs flex items-center gap-1"
                           >
                             <QrCode className="w-4 h-4" />
-                            Open Desk Verifier
+                            {currentUser.role === 'helpdesk_admin'
+                              ? 'Open Desk Verifier'
+                              : currentUser.id === item.userId
+                              ? 'View My Pass'
+                              : 'Claim Item'}
                           </button>
                         </div>
                       </div>
