@@ -1,27 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import crypto from 'crypto';
 import { extractAIFeatures } from '@/utils/aiEngine';
 
 const ItemSchema = z.object({
   type: z.enum(['Lost', 'Found']),
-  title: z.string().min(2),
-  category: z.string(),
-  brand: z.string().optional(),
-  color: z.string().optional(),
-  description: z.string().min(5),
-  location: z.string(),
-  locationDetails: z.string().optional(),
-  mapX: z.number().optional(),
-  mapY: z.number().optional(),
-  date: z.string(),
-  time: z.string().optional(),
+  title: z.string().min(2).max(120),
+  category: z.string().max(50),
+  brand: z.string().max(50).optional(),
+  color: z.string().max(50).optional(),
+  description: z.string().min(5).max(2000),
+  location: z.string().max(100),
+  locationDetails: z.string().max(200).optional(),
+  mapX: z.number().min(0).max(100).optional(),
+  mapY: z.number().min(0).max(100).optional(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  time: z.string().max(50).optional(),
   contactPreference: z.enum(['In-App Chat', 'Email Alerts', 'SMS Alerts']).default('In-App Chat'),
-  imageUrl: z.string().optional(),
-  identifyingDetails: z.string().optional(),
-  userId: z.string().optional(),
-  userName: z.string().optional(),
-  userEmail: z.string().optional(),
-  userRoll: z.string().optional(),
+  imageUrl: z
+    .string()
+    .refine(
+      (val) => !val || val.startsWith('https://') || val.startsWith('data:image/'),
+      { message: 'Invalid image URL or unsupported format' }
+    )
+    .optional(),
+  identifyingDetails: z.string().max(500).optional(),
+  userId: z.string().max(100).optional(),
+  userName: z.string().max(100).optional(),
+  userEmail: z.string().email().optional(),
+  userRoll: z.string().max(50).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -32,12 +39,12 @@ export async function POST(req: NextRequest) {
     // 1. AI Feature Extraction
     const aiAnalysis = extractAIFeatures(validated.title, validated.description);
 
-    // 2. Generate 6-Digit Handover PIN
-    const handoverCode = Math.floor(100000 + Math.random() * 900000).toString();
+    // 2. Cryptographically secure 6-digit Handover PIN
+    const handoverCode = crypto.randomInt(100000, 1000000).toString();
 
     const now = new Date().toISOString();
     const newItem = {
-      id: `item-${Date.now()}`,
+      id: `item-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
       ...validated,
       category: validated.category || aiAnalysis.category,
       color: validated.color || aiAnalysis.color,
@@ -76,10 +83,11 @@ export async function POST(req: NextRequest) {
       message: 'Item registered and AI features extracted successfully.',
     });
   } catch (error: any) {
+    const msg = error instanceof z.ZodError ? error.errors[0]?.message : 'Validation error';
     return NextResponse.json(
       {
         success: false,
-        error: error.message || 'Validation error processing item request',
+        error: msg,
       },
       { status: 400 }
     );

@@ -272,6 +272,26 @@ export default function Home() {
           <div className="space-y-6">
             {/* Filter Pills & View Toggles */}
             <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-xs space-y-4">
+              {/* Mobile Search Input (< md) */}
+              <div className="md:hidden relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Search lost & found items, categories, tags..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-9 py-2.5 bg-slate-100 rounded-xl text-xs border border-transparent focus:bg-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
               <div className="flex flex-wrap items-center justify-between gap-3">
                 {/* Type Filter Pills */}
                 <div className="flex bg-slate-100 p-1 rounded-2xl text-xs font-bold">
@@ -475,6 +495,7 @@ export default function Home() {
             onOpenChat={(item) => setActiveItemForChat(item)}
             onOpenHandover={(item) => setActiveItemForHandover(item)}
             focusedItem={focusedItemForMatch}
+            onClearFocus={() => setFocusedItemForMatch(null)}
           />
         )}
 
@@ -620,9 +641,15 @@ export default function Home() {
                             <span className="text-[10px] text-slate-400 uppercase font-bold block">
                               Handover PIN
                             </span>
-                            <span className="text-base font-black font-mono tracking-widest text-indigo-700">
-                              {item.handoverCode || '482910'}
-                            </span>
+                            {currentUser.role === 'helpdesk_admin' || currentUser.id === item.userId ? (
+                              <span className="text-base font-black font-mono tracking-widest text-indigo-700">
+                                {item.handoverCode || '482910'}
+                              </span>
+                            ) : (
+                              <span className="text-base font-black font-mono tracking-widest text-slate-400">
+                                ••••••
+                              </span>
+                            )}
                           </div>
 
                           <button
@@ -696,6 +723,10 @@ export default function Home() {
           item={activeItemForChat}
           currentUser={currentUser}
           onClose={() => setActiveItemForChat(null)}
+          onOpenHandover={(i) => {
+            setActiveItemForChat(null);
+            setActiveItemForHandover(i);
+          }}
         />
       )}
 

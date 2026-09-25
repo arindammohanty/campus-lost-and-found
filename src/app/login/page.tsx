@@ -19,8 +19,8 @@ import {
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('250301120059@centurionuniv.edu.in');
-  const [password, setPassword] = useState('Am@HIG425');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 

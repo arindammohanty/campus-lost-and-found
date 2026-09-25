@@ -39,7 +39,7 @@ export const CampusMap: React.FC<CampusMapProps> = ({
   const handleBuildingClick = (building: CampusLocation) => {
     setSelectedBuilding(building);
     if (onSelectLocation) {
-      onSelectLocation(building.name, { x: building.mapX, mapY: building.mapY } as any);
+      onSelectLocation(building.name, { x: building.mapX, y: building.mapY });
     }
   };
 
@@ -191,9 +191,24 @@ export const CampusMap: React.FC<CampusMapProps> = ({
         })}
 
         {/* Render Specific Item Map Pins */}
-        {!pickerMode && displayedItems.map(item => {
+        {!pickerMode && displayedItems.map((item, idx) => {
           if (item.mapX === undefined || item.mapY === undefined) return null;
           const isLost = item.type === 'Lost';
+
+          // Spiderfying: radial offset for pins sharing near-identical coordinates
+          const sameCoordCount = displayedItems
+            .slice(0, idx)
+            .filter(prev => Math.abs((prev.mapX ?? 0) - (item.mapX ?? 0)) < 2.5 && Math.abs((prev.mapY ?? 0) - (item.mapY ?? 0)) < 2.5)
+            .length;
+
+          let displayX = item.mapX;
+          let displayY = item.mapY;
+          if (sameCoordCount > 0) {
+            const angle = (sameCoordCount * 137.5) * (Math.PI / 180);
+            const radius = 2.5 * Math.min(sameCoordCount, 3);
+            displayX = Math.min(95, Math.max(5, item.mapX + Math.cos(angle) * radius));
+            displayY = Math.min(92, Math.max(10, item.mapY + Math.sin(angle) * radius));
+          }
 
           return (
             <div
@@ -203,8 +218,8 @@ export const CampusMap: React.FC<CampusMapProps> = ({
                 if (onItemClick) onItemClick(item);
               }}
               style={{
-                left: `${item.mapX}%`,
-                top: `${item.mapY}%`,
+                left: `${displayX}%`,
+                top: `${displayY}%`,
                 transform: 'translate(-50%, -100%)',
               }}
               className="absolute z-20 cursor-pointer group"

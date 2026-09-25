@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Item, MatchResult, User } from '../types/portal';
 import { getSmartMatches } from '../utils/aiEngine';
 import {
@@ -15,6 +15,8 @@ import {
   CheckCircle,
   Eye,
   Layers,
+  X,
+  RotateCcw,
 } from 'lucide-react';
 
 interface SmartMatchPanelProps {
@@ -24,6 +26,7 @@ interface SmartMatchPanelProps {
   onOpenChat: (item: Item) => void;
   onOpenHandover: (item: Item) => void;
   focusedItem?: Item | null;
+  onClearFocus?: () => void;
 }
 
 export const SmartMatchPanel: React.FC<SmartMatchPanelProps> = ({
@@ -33,14 +36,27 @@ export const SmartMatchPanel: React.FC<SmartMatchPanelProps> = ({
   onOpenChat,
   onOpenHandover,
   focusedItem,
+  onClearFocus,
 }) => {
+  const [dismissedPairs, setDismissedPairs] = useState<Set<string>>(new Set());
+
   // If a specific item is selected, find its matches; otherwise get all high-confidence pairs
   const allMatches = getSmartMatches(items, 30);
-  const displayMatches = focusedItem
+  const candidateMatches = focusedItem
     ? allMatches.filter(
         (m) => m.lostItem.id === focusedItem.id || m.foundItem.id === focusedItem.id
       )
     : allMatches;
+
+  // Filter out any user-dismissed pairs
+  const displayMatches = candidateMatches.filter(
+    (m) => !dismissedPairs.has(`${m.lostItem.id}_${m.foundItem.id}`)
+  );
+
+  const handleDismiss = (lostId: string, foundId: string) => {
+    const pairKey = `${lostId}_${foundId}`;
+    setDismissedPairs((prev) => new Set(prev).add(pairKey));
+  };
 
   return (
     <div className="space-y-6">
@@ -50,7 +66,7 @@ export const SmartMatchPanel: React.FC<SmartMatchPanelProps> = ({
           <div className="flex items-center gap-2 mb-1">
             <span className="bg-indigo-500/20 text-indigo-300 font-bold text-[10px] uppercase tracking-wider px-2.5 py-0.5 rounded-full border border-indigo-500/30 flex items-center gap-1">
               <Sparkles className="w-3.5 h-3.5 text-indigo-400 animate-spin-slow" />
-              AI Visual & Semantic Engine
+              AI Visual &amp; Semantic Engine
             </span>
             <span className="text-xs text-slate-400 font-mono">Xenova/clip-vit-base-patch32</span>
           </div>
@@ -63,18 +79,28 @@ export const SmartMatchPanel: React.FC<SmartMatchPanelProps> = ({
 
         <div className="flex items-center gap-3 bg-white/10 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-white/10">
           <div className="text-right">
-            <span className="text-[10px] text-slate-300 uppercase font-semibold block">Total Matches</span>
-            <span className="text-xl font-black text-amber-400">{displayMatches.length} Pairs</span>
+            <span className="text-[10px] text-slate-300 uppercase font-semibold block">Active Pairs</span>
+            <span className="text-xl font-black text-amber-400">{displayMatches.length} Matches</span>
           </div>
         </div>
       </div>
 
       {focusedItem && (
-        <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-4 flex items-center justify-between">
+        <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-xs text-indigo-900 font-semibold">
-            <Tag className="w-4 h-4 text-indigo-600" />
-            Showing matches specifically for: <strong className="text-slate-900">&quot;{focusedItem.title}&quot;</strong>
+            <Tag className="w-4 h-4 text-indigo-600 shrink-0" />
+            <span>
+              Showing matches specifically for: <strong className="text-slate-900">&quot;{focusedItem.title}&quot;</strong>
+            </span>
           </div>
+          {onClearFocus && (
+            <button
+              onClick={onClearFocus}
+              className="text-xs font-bold bg-white text-indigo-700 hover:bg-indigo-100/70 border border-indigo-200 px-3 py-1.5 rounded-xl transition-all shadow-xs flex items-center gap-1"
+            >
+              <RotateCcw className="w-3.5 h-3.5" /> Show All Campus Matches
+            </button>
+          )}
         </div>
       )}
 
@@ -82,11 +108,20 @@ export const SmartMatchPanel: React.FC<SmartMatchPanelProps> = ({
       {displayMatches.length === 0 ? (
         <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center shadow-xs">
           <Sparkles className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-          <h3 className="font-bold text-base text-slate-800">No High-Confidence Matches Found Yet</h3>
+          <h3 className="font-bold text-base text-slate-800">No High-Confidence Matches Found</h3>
           <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
-            As students report more lost and found items with photos across campus, our CLIP multimodal
-            AI will automatically flag similar listings here.
+            {dismissedPairs.size > 0
+              ? 'You have dismissed previous matches for these items.'
+              : 'As students report more lost and found items with photos across campus, our CLIP multimodal AI will automatically flag similar listings here.'}
           </p>
+          {dismissedPairs.size > 0 && (
+            <button
+              onClick={() => setDismissedPairs(new Set())}
+              className="mt-3 text-xs font-bold text-indigo-600 hover:underline"
+            >
+              Reset Dismissed Matches
+            </button>
+          )}
         </div>
       ) : (
         <div className="space-y-4">
@@ -120,7 +155,7 @@ export const SmartMatchPanel: React.FC<SmartMatchPanelProps> = ({
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => onOpenChat(match.lostItem)}
-                      className="text-xs font-bold bg-slate-900 text-white hover:bg-slate-800 px-3 py-1.5 rounded-xl flex items-center gap-1 transition-colors"
+                      className="text-xs font-bold bg-slate-900 text-white hover:bg-slate-800 px-3 py-1.5 rounded-xl flex items-center gap-1 transition-colors shadow-xs"
                     >
                       <MessageSquare className="w-3.5 h-3.5" />
                       Chat Finder/Owner
@@ -131,6 +166,13 @@ export const SmartMatchPanel: React.FC<SmartMatchPanelProps> = ({
                     >
                       <ShieldCheck className="w-3.5 h-3.5" />
                       Help Desk Handover
+                    </button>
+                    <button
+                      onClick={() => handleDismiss(match.lostItem.id, match.foundItem.id)}
+                      title="Dismiss false positive match"
+                      className="text-xs font-semibold text-slate-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-xl transition-colors border border-transparent hover:border-red-200"
+                    >
+                      <X className="w-4 h-4" />
                     </button>
                   </div>
                 </div>

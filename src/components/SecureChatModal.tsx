@@ -19,18 +19,21 @@ interface SecureChatModalProps {
   item: Item;
   currentUser: User;
   onClose: () => void;
+  onOpenHandover?: (item: Item) => void;
 }
 
 export const SecureChatModal: React.FC<SecureChatModalProps> = ({
   item,
   currentUser,
   onClose,
+  onOpenHandover,
 }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const isOwner = item.userId === currentUser.id;
+  const claimantId = currentUser.role === 'helpdesk_admin' || isOwner ? undefined : currentUser.id;
   const role: 'finder' | 'owner' | 'helpdesk' =
     currentUser.role === 'helpdesk_admin'
       ? 'helpdesk'
@@ -43,7 +46,7 @@ export const SecureChatModal: React.FC<SecureChatModalProps> = ({
       : 'finder';
 
   const loadMessages = () => {
-    const list = getChatMessages(item.id);
+    const list = getChatMessages(item.id, claimantId);
     setMessages(list);
   };
 
@@ -51,7 +54,7 @@ export const SecureChatModal: React.FC<SecureChatModalProps> = ({
     loadMessages();
     const interval = setInterval(loadMessages, 3000);
     return () => clearInterval(interval);
-  }, [item.id]);
+  }, [item.id, claimantId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -61,7 +64,7 @@ export const SecureChatModal: React.FC<SecureChatModalProps> = ({
     const text = textToSend || inputText;
     if (!text.trim()) return;
 
-    sendChatMessage(item.id, currentUser, role, text);
+    sendChatMessage(item.id, currentUser, role, text, claimantId);
     setInputText('');
     loadMessages();
   };
@@ -96,12 +99,27 @@ export const SecureChatModal: React.FC<SecureChatModalProps> = ({
             </div>
           </div>
 
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {onOpenHandover && (
+              <button
+                onClick={() => {
+                  onClose();
+                  onOpenHandover(item);
+                }}
+                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-xs"
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Handover Pass</span>
+              </button>
+            )}
+
+            <button
+              onClick={onClose}
+              className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Security Warning Notice Banner */}

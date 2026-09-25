@@ -48,9 +48,21 @@ export const HandoverModal: React.FC<HandoverModalProps> = ({
   const [ticket, setTicket] = useState<HandoverTicket | null>(null);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
-  // Officer Verification Form state
-  const [inputCode, setInputCode] = useState(item.handoverCode || '');
+  // Officer Verification Form state - do not prefill with secret handoverCode
+  const [inputCode, setInputCode] = useState('');
   const [officerNotes, setOfficerNotes] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  const isFinderDepositing = item.type === 'Found' && currentUser.id === item.userId;
+  const currentPin = ticket?.handoverCode || item.handoverCode || '482910';
+
+  const handleCopyPin = () => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(currentPin);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
 
   // Check if a ticket already exists for this item
   useEffect(() => {
@@ -192,13 +204,15 @@ export const HandoverModal: React.FC<HandoverModalProps> = ({
                   <ShieldCheck className="w-32 h-32" />
                 </div>
 
-                <span className="inline-block bg-indigo-500/30 text-indigo-300 font-mono text-[10px] uppercase font-bold tracking-widest px-3 py-1 rounded-full mb-3 border border-indigo-400/30">
-                  Verified Campus Handover Pass
-                </span>
+                <div className="flex items-center justify-center gap-2 mb-3">
+                  <span className="inline-block bg-indigo-500/30 text-indigo-300 font-mono text-[10px] uppercase font-bold tracking-widest px-3 py-1 rounded-full border border-indigo-400/30">
+                    {isFinderDepositing ? '📦 Finder Custody Deposit Pass' : '🎯 Verified Campus Handover Pass'}
+                  </span>
+                </div>
 
                 <h4 className="text-xl font-black tracking-tight">{item.title}</h4>
                 <p className="text-xs text-slate-300 mt-1">
-                  Location: {ticket?.helpDeskLocation || selectedDesk}
+                  Designated Counter: <span className="font-semibold text-white">{ticket?.helpDeskLocation || selectedDesk}</span>
                 </p>
 
                 {/* QR Code and 6-Digit Code */}
@@ -217,18 +231,29 @@ export const HandoverModal: React.FC<HandoverModalProps> = ({
                     </div>
                   )}
 
-                  <div className="mt-4">
-                    <span className="text-[11px] uppercase tracking-widest text-slate-400 font-bold block">
+                  <div className="mt-4 flex flex-col items-center">
+                    <span className="text-[11px] uppercase tracking-widest text-slate-400 font-bold block mb-1">
                       6-Digit Security Handover PIN
                     </span>
-                    <span className="text-3xl font-black font-mono tracking-widest text-amber-400">
-                      {ticket?.handoverCode || item.handoverCode || '482910'}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-3xl font-black font-mono tracking-widest text-amber-400 bg-white/5 px-4 py-1 rounded-xl border border-white/10">
+                        {currentPin}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleCopyPin}
+                        className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white transition-colors text-xs font-semibold flex items-center gap-1"
+                        title="Copy PIN"
+                      >
+                        {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Download className="w-4 h-4" />}
+                        <span className="text-[10px]">{copied ? 'Copied!' : 'Copy'}</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
 
                 <div className="text-[11px] text-slate-300 border-t border-slate-700/60 pt-3">
-                  Claimant: <strong className="text-white">{currentUser.name}</strong> • Roll:{' '}
+                  {isFinderDepositing ? 'Depositing Finder' : 'Claimant'}: <strong className="text-white">{currentUser.name}</strong> • Roll:{' '}
                   <span className="font-mono text-indigo-300">{currentUser.rollNumber}</span>
                 </div>
               </div>
@@ -289,8 +314,8 @@ export const HandoverModal: React.FC<HandoverModalProps> = ({
                 </div>
               </div>
 
-              {/* Secret Detail inspection box */}
-              {item.identifyingDetails && (
+              {/* Secret Detail inspection box - Restricted to Help Desk Officers */}
+              {isHelpDeskOfficer && item.identifyingDetails && (
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5">
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
                     Registered Secret Detail on Record:

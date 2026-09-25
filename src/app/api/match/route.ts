@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { calculateMatchScore } from '@/utils/aiEngine';
 import { Item } from '@/types/portal';
 
+const MAX_CANDIDATES = 50;
+
 export async function POST(req: NextRequest) {
   try {
     const { targetItem, candidates } = await req.json();
@@ -13,8 +15,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const matches = candidates
-      .filter((candidate: Item) => candidate.type !== targetItem.type)
+    // Limit evaluation array size to prevent CPU algorithmic exhaustion
+    const boundedCandidates = candidates.slice(0, MAX_CANDIDATES);
+
+    const matches = boundedCandidates
+      .filter((candidate: Item) => candidate && candidate.id !== targetItem.id && candidate.type !== targetItem.type)
       .map((candidate: Item) => {
         const lost = targetItem.type === 'Lost' ? targetItem : candidate;
         const found = targetItem.type === 'Found' ? targetItem : candidate;
@@ -26,7 +31,7 @@ export async function POST(req: NextRequest) {
           similarity,
         };
       })
-      .filter((m: any) => m.score >= 35)
+      .filter((m: any) => m.score >= 30)
       .sort((a: any, b: any) => b.score - a.score);
 
     return NextResponse.json({
@@ -35,6 +40,9 @@ export async function POST(req: NextRequest) {
       total: matches.length,
     });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to evaluate similarity matches' },
+      { status: 500 }
+    );
   }
 }

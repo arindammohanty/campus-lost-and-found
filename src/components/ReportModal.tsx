@@ -101,22 +101,65 @@ export const ReportModal: React.FC<ReportModalProps> = ({
   const [identifyingDetails, setIdentifyingDetails] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [isAiAnalyzing, setIsAiAnalyzing] = useState(false);
-  const [error, setError] = useState('');
+  const [currentCustody, setCurrentCustody] = useState<'In Personal Custody' | 'Deposited at Campus Help Desk'>('Deposited at Campus Help Desk');
+  const modalScrollRef = React.useRef<HTMLFormElement>(null);
 
-  // Handle local file upload with instant base64 preview
+  // Handle local file upload with client-side canvas compression to prevent localStorage quota exhaustion
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        setError('Image must be under 5MB');
+      if (!file.type.startsWith('image/')) {
+        setError('Please select an image file (PNG, JPG, or WEBP).');
         return;
       }
+      if (file.type === 'image/svg+xml') {
+        setError('SVG images are restricted for security reasons.');
+        return;
+      }
+      if (file.size > 8 * 1024 * 1024) {
+        setError('Image file must be under 8MB.');
+        return;
+      }
+
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setImageUrl(reader.result as string);
-        setError('');
-        // Trigger quick AI feature suggestion
-        triggerAiAssist(title, description);
+      reader.onload = (event) => {
+        const rawResult = event.target?.result as string;
+        const img = new Image();
+        img.onload = () => {
+          // Off-screen canvas compression to 800x600 max
+          const canvas = document.createElement('canvas');
+          const MAX_WIDTH = 800;
+          const MAX_HEIGHT = 600;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height = Math.round(height * (MAX_WIDTH / width));
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width = Math.round(width * (MAX_HEIGHT / height));
+              height = MAX_HEIGHT;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            // Export compressed JPEG (~40-70KB)
+            const compressed = canvas.toDataURL('image/jpeg', 0.72);
+            setImageUrl(compressed);
+            setError('');
+            triggerAiAssist(title, description);
+          } else {
+            setImageUrl(rawResult);
+          }
+        };
+        img.src = rawResult;
       };
       reader.readAsDataURL(file);
     }
@@ -155,6 +198,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
     e.preventDefault();
     if (!title.trim() || !description.trim()) {
       setError('Please provide an item title and description.');
+      modalScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
@@ -173,6 +217,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
       time,
       contactPreference,
       identifyingDetails: identifyingDetails.trim(),
+      currentCustody: type === 'Found' ? currentCustody : undefined,
       imageUrl: imageUrl || (type === 'Found'
         ? 'https://images.unsplash.com/photo-1584438784894-089d6a62b8fa?auto=format&fit=crop&q=80&w=800'
         : 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&q=80&w=800'),
@@ -252,7 +297,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
         </div>
 
         {/* Scrollable Form Body */}
-        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-6 flex-1">
+        <form ref={modalScrollRef} onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-6 flex-1">
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-2xl text-xs flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0" />
@@ -347,6 +392,40 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                   className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-600 bg-white"
                 />
               </div>
+
+              {type === 'Found' && (
+                <div className="sm:col-span-2 bg-emerald-50/60 border border-emerald-200/80 rounded-2xl p-3.5">
+                  <label className="block text-xs font-bold text-emerald-950 mb-1.5">
+                    📦 Current Item Custody Status *
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setCurrentCustody('Deposited at Campus Help Desk')}
+                      className={`px-3 py-2 rounded-xl text-xs font-semibold text-left border transition-all ${
+                        currentCustody === 'Deposited at Campus Help Desk'
+                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                          : 'bg-white text-slate-700 border-emerald-200 hover:bg-emerald-50'
+                      }`}
+                    >
+                      <span className="block font-bold">🏛️ Deposited at Campus Help Desk</span>
+                      <span className="text-[10px] opacity-90 block">Safely deposited with campus security / desk</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCurrentCustody('In Personal Custody')}
+                      className={`px-3 py-2 rounded-xl text-xs font-semibold text-left border transition-all ${
+                        currentCustody === 'In Personal Custody'
+                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                          : 'bg-white text-slate-700 border-emerald-200 hover:bg-emerald-50'
+                      }`}
+                    >
+                      <span className="block font-bold">🎒 In My Personal Custody</span>
+                      <span className="text-[10px] opacity-90 block">Holding item until owner contacts</span>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

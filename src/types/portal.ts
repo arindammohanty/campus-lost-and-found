@@ -104,6 +104,7 @@ export interface MatchResult {
 export interface ChatMessage {
   id: string;
   itemId: string;
+  threadId?: string; // ${itemId}_${claimantId} for private claimant-finder thread
   senderId: string;
   senderName: string;
   senderRole: 'finder' | 'owner' | 'helpdesk';

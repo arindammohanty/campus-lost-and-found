@@ -345,56 +345,74 @@ export function createHandoverTicket(
 }
 
 export function verifyHandoverAtDesk(
-  ticketId: string,
+  ticketIdOrItemId: string,
   enteredCode: string,
   officerName: string
 ): { success: boolean; message: string; ticket?: HandoverTicket } {
   const tickets = getHandoverTickets();
-  const ticketIndex = tickets.findIndex(t => t.id === ticketId);
-  if (ticketIndex === -1) {
-    return { success: false, message: 'Handover ticket not found.' };
+  const ticketIndex = tickets.findIndex(t => t.id === ticketIdOrItemId || t.itemId === ticketIdOrItemId);
+  let ticket = ticketIndex !== -1 ? tickets[ticketIndex] : undefined;
+
+  const items = getPortalItems();
+  const targetItem = items.find(i => i.id === ticketIdOrItemId || (ticket && i.id === ticket.itemId));
+
+  const validPin = ticket?.handoverCode || targetItem?.handoverCode;
+  if (!validPin) {
+    return { success: false, message: 'No registered handover PIN found for this item.' };
   }
 
-  const ticket = tickets[ticketIndex];
-  if (ticket.handoverCode !== enteredCode.trim()) {
+  if (validPin.trim() !== enteredCode.trim()) {
     return { success: false, message: 'Invalid 6-digit security handover code.' };
   }
 
-  ticket.status = 'Completed';
-  ticket.officerNotes = `Verified and handed over in person by ${officerName}.`;
-  tickets[ticketIndex] = ticket;
-  writeStorage(STORAGE_KEYS.TICKETS, tickets);
+  if (ticket) {
+    ticket.status = 'Completed';
+    ticket.officerNotes = `Verified and handed over in person by ${officerName}.`;
+    tickets[ticketIndex] = ticket;
+    writeStorage(STORAGE_KEYS.TICKETS, tickets);
+  }
 
-  // Transition item status to 'Returned'
-  updatePortalItemStatus(
-    ticket.itemId,
-    'Returned',
-    `Item verified and handed over at ${ticket.helpDeskLocation}. Case successfully closed.`,
-    officerName
-  );
+  if (targetItem) {
+    updatePortalItemStatus(
+      targetItem.id,
+      'Returned',
+      `Item verified and handed over at ${ticket?.helpDeskLocation || targetItem.location || 'Campus Help Desk'}. Case successfully closed.`,
+      officerName
+    );
+  }
 
   return { success: true, message: 'Handover verified successfully! Item marked as Returned.', ticket };
 }
 
 // ----------------- SECURE CHAT -----------------
 
-export function getChatMessages(itemId: string): ChatMessage[] {
+export function getChatMessages(itemId: string, claimantId?: string): ChatMessage[] {
   const allMessages = readStorage<ChatMessage[]>(STORAGE_KEYS.MESSAGES, []);
-  return allMessages.filter(m => m.itemId === itemId);
+  return allMessages.filter(m => {
+    if (m.itemId !== itemId) return false;
+    // If claimantId is specified, isolate to that claimant's thread or system messages
+    if (claimantId && m.threadId) {
+      return m.threadId === `${itemId}_${claimantId}` || m.isSystem;
+    }
+    return true;
+  });
 }
 
 export function sendChatMessage(
   itemId: string,
   sender: User,
   senderRole: 'finder' | 'owner' | 'helpdesk',
-  text: string
+  text: string,
+  claimantId?: string
 ): ChatMessage {
   const allMessages = readStorage<ChatMessage[]>(STORAGE_KEYS.MESSAGES, []);
   const now = new Date().toISOString();
+  const threadId = claimantId ? `${itemId}_${claimantId}` : `${itemId}_${sender.id}`;
 
   const newMsg: ChatMessage = {
     id: `msg-${Date.now()}`,
     itemId,
+    threadId,
     senderId: sender.id,
     senderName: sender.name,
     senderRole,
