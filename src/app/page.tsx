@@ -209,8 +209,25 @@ export default function Home() {
     showToast(`Updated item status to: ${newStatus}`);
   };
 
+  // Deduplicated unique items failsafe
+  const uniqueItems = React.useMemo(() => {
+    const seenIds = new Set<string>();
+    const seenContent = new Set<string>();
+    const result: Item[] = [];
+    for (const item of items) {
+      if (!item || !item.id) continue;
+      const key = `${(item.title || '').trim().toLowerCase()}|${(item.description || '').trim().toLowerCase()}|${item.date || ''}`;
+      if (!seenIds.has(item.id) && !seenContent.has(key)) {
+        seenIds.add(item.id);
+        seenContent.add(key);
+        result.push(item);
+      }
+    }
+    return result;
+  }, [items]);
+
   // Filtering Logic
-  const filteredItems = items.filter((item) => {
+  const filteredItems = uniqueItems.filter((item) => {
     // Type Filter
     if (selectedType !== 'All' && item.type !== selectedType) return false;
 
@@ -242,10 +259,10 @@ export default function Home() {
   });
 
   // Calculate live statistics
-  const totalLost = items.filter((i) => i.type === 'Lost').length;
-  const totalFound = items.filter((i) => i.type === 'Found').length;
-  const totalReturned = items.filter((i) => i.status === 'Returned').length;
-  const totalInHandover = items.filter((i) => i.status === 'In Handover').length;
+  const totalLost = uniqueItems.filter((i) => i.type === 'Lost').length;
+  const totalFound = uniqueItems.filter((i) => i.type === 'Found').length;
+  const totalReturned = uniqueItems.filter((i) => i.status === 'Returned').length;
+  const totalInHandover = uniqueItems.filter((i) => i.status === 'In Handover').length;
 
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">

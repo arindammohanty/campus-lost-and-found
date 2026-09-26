@@ -47,10 +47,33 @@ export function initializePortalStorage(): void {
   }
 }
 
-// ----------------- ITEM OPERATIONS -----------------
+// Helper to deduplicate item arrays by ID and content signature
+function deduplicateItems(items: Item[]): Item[] {
+  const seenIds = new Set<string>();
+  const seenContent = new Set<string>();
+  const result: Item[] = [];
+
+  for (const item of items) {
+    if (!item || !item.id) continue;
+    const contentKey = `${(item.title || '').trim().toLowerCase()}|${(item.description || '').trim().toLowerCase()}|${item.date || ''}`;
+
+    if (!seenIds.has(item.id) && !seenContent.has(contentKey)) {
+      seenIds.add(item.id);
+      seenContent.add(contentKey);
+      result.push(item);
+    }
+  }
+
+  return result;
+}
 
 export function getPortalItems(): Item[] {
-  return readStorage<Item[]>(STORAGE_KEYS.ITEMS, INITIAL_ITEMS);
+  const raw = readStorage<Item[]>(STORAGE_KEYS.ITEMS, INITIAL_ITEMS);
+  const deduped = deduplicateItems(raw);
+  if (deduped.length !== raw.length) {
+    writeStorage(STORAGE_KEYS.ITEMS, deduped);
+  }
+  return deduped;
 }
 
 export async function syncPortalItemsWithServer(): Promise<Item[]> {
@@ -61,33 +84,19 @@ export async function syncPortalItemsWithServer(): Promise<Item[]> {
     const data = await res.json();
     if (data.success && Array.isArray(data.items)) {
       const serverItems: Item[] = data.items;
-      const localItems = getPortalItems();
+      
+      // Deduplicate server items and replace localStorage cache cleanly
+      const deduped = deduplicateItems(serverItems);
 
-      // Merge items by id: server items take precedence, plus any local items not yet on server
-      const itemMap = new Map<string, Item>();
-      serverItems.forEach((item) => itemMap.set(item.id, item));
-      localItems.forEach((item) => {
-        if (!itemMap.has(item.id)) {
-          itemMap.set(item.id, item);
-          // Sync unsynced local item to server in background
-          fetch('/api/items', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(item),
-          }).catch((err) => console.error('Failed to sync local item to server:', err));
-        }
-      });
-
-      const merged = Array.from(itemMap.values());
-      // Sort by createdAt descending
-      merged.sort((a, b) => {
+      // Sort by creation date descending
+      deduped.sort((a, b) => {
         const timeA = new Date(a.createdAt || a.date).getTime();
         const timeB = new Date(b.createdAt || b.date).getTime();
         return timeB - timeA;
       });
 
-      writeStorage(STORAGE_KEYS.ITEMS, merged);
-      return merged;
+      writeStorage(STORAGE_KEYS.ITEMS, deduped);
+      return deduped;
     }
   } catch (err) {
     console.error('Failed to sync items with server:', err);
@@ -220,6 +229,7 @@ export function savePortalItem(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        id: newItem.id,
         type: newItem.type,
         title: newItem.title,
         category: newItem.category,

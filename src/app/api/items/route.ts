@@ -53,6 +53,7 @@ function dbRowToItem(row: any): Item {
 }
 
 const ItemSchema = z.object({
+  id: z.string().trim().optional(),
   type: z.enum(['Lost', 'Found']),
   title: z.string().trim().min(2, 'Title must be at least 2 characters').max(120),
   category: z.string().trim().min(1, 'Category is required').max(50),
@@ -145,15 +146,41 @@ export async function POST(req: NextRequest) {
   try {
     const validated = ItemSchema.parse(body);
 
-    // 1. AI Feature Extraction
+    const supabase = getSupabase();
+
+    // 1. Deduplication guard: Check if identical item was already reported
+    const cleanTitle = validated.title.trim();
+    const cleanDesc = validated.description.trim();
+
+    const { data: existingMatches } = await supabase
+      .from('portal_items')
+      .select('*')
+      .eq('title', cleanTitle)
+      .eq('description', cleanDesc)
+      .limit(1);
+
+    if (existingMatches && existingMatches.length > 0) {
+      return NextResponse.json(
+        {
+          success: true,
+          item: dbRowToItem(existingMatches[0]),
+          message: 'Item already registered. Duplicate listing prevented.',
+        },
+        { status: 200 }
+      );
+    }
+
+    // 2. AI Feature Extraction
     const aiAnalysis = extractAIFeatures(validated.title, validated.description);
 
-    // 2. Cryptographically secure 6-digit Handover PIN
+    // 3. Cryptographically secure 6-digit Handover PIN
     const handoverCode = crypto.randomInt(100000, 1000000).toString();
 
     const now = new Date().toISOString();
+    const itemId = validated.id || `item-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+
     const newItem: Item = {
-      id: `item-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
+      id: itemId,
       type: validated.type,
       title: validated.title,
       category: (validated.category || aiAnalysis.category) as any,
@@ -205,42 +232,44 @@ export async function POST(req: NextRequest) {
       updatedAt: now,
     };
 
-    // Persist to Supabase database so all users can see this item
-    const supabase = getSupabase();
-    const { error: insertError } = await supabase.from('portal_items').insert({
-      id: newItem.id,
-      type: newItem.type,
-      title: newItem.title,
-      category: newItem.category,
-      brand: newItem.brand || '',
-      color: newItem.color || '',
-      description: newItem.description,
-      location: newItem.location,
-      location_details: newItem.locationDetails || '',
-      map_x: newItem.mapX,
-      map_y: newItem.mapY,
-      date: newItem.date,
-      time: newItem.time,
-      contact_preference: newItem.contactPreference,
-      image_url: newItem.imageUrl,
-      identifying_details: newItem.identifyingDetails || '',
-      status: newItem.status,
-      history_log: newItem.historyLog,
-      ai_tags: newItem.aiTags,
-      ai_confidence: newItem.aiConfidence,
-      handover_code: newItem.handoverCode,
-      help_desk_location: newItem.helpDeskLocation,
-      current_custody: newItem.currentCustody,
-      user_id: newItem.userId,
-      user_name: newItem.userName,
-      user_email: newItem.userEmail,
-      user_roll: newItem.userRoll,
-      created_at: now,
-      updated_at: now,
-    });
+    // Upsert into Supabase portal_items table to prevent duplicates
+    const { error: insertError } = await supabase.from('portal_items').upsert(
+      {
+        id: newItem.id,
+        type: newItem.type,
+        title: newItem.title,
+        category: newItem.category,
+        brand: newItem.brand || '',
+        color: newItem.color || '',
+        description: newItem.description,
+        location: newItem.location,
+        location_details: newItem.locationDetails || '',
+        map_x: newItem.mapX,
+        map_y: newItem.mapY,
+        date: newItem.date,
+        time: newItem.time,
+        contact_preference: newItem.contactPreference,
+        image_url: newItem.imageUrl,
+        identifying_details: newItem.identifyingDetails || '',
+        status: newItem.status,
+        history_log: newItem.historyLog,
+        ai_tags: newItem.aiTags,
+        ai_confidence: newItem.aiConfidence,
+        handover_code: newItem.handoverCode,
+        help_desk_location: newItem.helpDeskLocation,
+        current_custody: newItem.currentCustody,
+        user_id: newItem.userId,
+        user_name: newItem.userName,
+        user_email: newItem.userEmail,
+        user_roll: newItem.userRoll,
+        created_at: now,
+        updated_at: now,
+      },
+      { onConflict: 'id' }
+    );
 
     if (insertError) {
-      console.error('Supabase portal_items insert error:', insertError);
+      console.error('Supabase portal_items upsert error:', insertError);
     }
 
     return NextResponse.json(
