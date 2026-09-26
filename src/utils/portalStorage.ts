@@ -53,9 +53,51 @@ export function getPortalItems(): Item[] {
   return readStorage<Item[]>(STORAGE_KEYS.ITEMS, INITIAL_ITEMS);
 }
 
+export async function syncPortalItemsWithServer(): Promise<Item[]> {
+  if (typeof window === 'undefined') return [];
+  try {
+    const res = await fetch('/api/items');
+    if (!res.ok) return getPortalItems();
+    const data = await res.json();
+    if (data.success && Array.isArray(data.items)) {
+      const serverItems: Item[] = data.items;
+      const localItems = getPortalItems();
+
+      // Merge items by id: server items take precedence, plus any local items not yet on server
+      const itemMap = new Map<string, Item>();
+      serverItems.forEach((item) => itemMap.set(item.id, item));
+      localItems.forEach((item) => {
+        if (!itemMap.has(item.id)) {
+          itemMap.set(item.id, item);
+          // Sync unsynced local item to server in background
+          fetch('/api/items', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(item),
+          }).catch((err) => console.error('Failed to sync local item to server:', err));
+        }
+      });
+
+      const merged = Array.from(itemMap.values());
+      // Sort by createdAt descending
+      merged.sort((a, b) => {
+        const timeA = new Date(a.createdAt || a.date).getTime();
+        const timeB = new Date(b.createdAt || b.date).getTime();
+        return timeB - timeA;
+      });
+
+      writeStorage(STORAGE_KEYS.ITEMS, merged);
+      return merged;
+    }
+  } catch (err) {
+    console.error('Failed to sync items with server:', err);
+  }
+  return getPortalItems();
+}
+
 export function getPortalItemById(id: string): Item | undefined {
   const items = getPortalItems();
-  return items.find(i => i.id === id);
+  return items.find((i) => i.id === id);
 }
 
 export function savePortalItem(
@@ -171,6 +213,36 @@ export function savePortalItem(
 
   items.unshift(newItem);
   writeStorage(STORAGE_KEYS.ITEMS, items);
+
+  // Send to server in background so all users see it across devices
+  if (typeof window !== 'undefined') {
+    fetch('/api/items', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: newItem.type,
+        title: newItem.title,
+        category: newItem.category,
+        brand: newItem.brand,
+        color: newItem.color,
+        description: newItem.description,
+        location: newItem.location,
+        locationDetails: newItem.locationDetails,
+        mapX: newItem.mapX,
+        mapY: newItem.mapY,
+        date: newItem.date,
+        time: newItem.time,
+        contactPreference: newItem.contactPreference,
+        imageUrl: newItem.imageUrl,
+        identifyingDetails: newItem.identifyingDetails,
+        currentCustody: newItem.currentCustody,
+        userId: user.id,
+        userName: user.name,
+        userEmail: user.email,
+        userRoll: user.rollNumber,
+      }),
+    }).catch((err) => console.error('Failed to sync reported item to server:', err));
+  }
 
   return { item: newItem, matches: matchedList };
 }

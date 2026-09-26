@@ -70,6 +70,7 @@ export interface Item {
   handoverCode?: string; // 6-digit security PIN for Help Desk handover
   qrCodeDataUrl?: string; // Scannable QR code
   helpDeskLocation?: string;
+  currentCustody?: string;
   
   // User references (Private / Shielded)
   userId: string;

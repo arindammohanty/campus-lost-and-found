@@ -21,6 +21,7 @@ import {
   getPortalNotifications,
   markNotificationAsRead,
   getHandoverTickets,
+  syncPortalItemsWithServer,
 } from '../utils/portalStorage';
 import { CATEGORIES, CAMPUS_LOCATIONS } from '../data/campusData';
 
@@ -110,6 +111,24 @@ export default function Home() {
     const active = getActiveUser();
     setCurrentUserState(active);
     refreshAllData(active);
+
+    // Sync with live server database immediately so all users see reported lost and found items
+    syncPortalItemsWithServer().then((syncedItems) => {
+      if (syncedItems && syncedItems.length > 0) {
+        setItems(syncedItems);
+      }
+    });
+
+    // Periodic background sync every 15s to catch new items reported by any student
+    const interval = setInterval(() => {
+      syncPortalItemsWithServer().then((syncedItems) => {
+        if (syncedItems && syncedItems.length > 0) {
+          setItems(syncedItems);
+        }
+      });
+    }, 15000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const handleSwitchUser = (newUser: User) => {
@@ -161,6 +180,12 @@ export default function Home() {
     const result = savePortalItem(formData, currentUser);
     setReportModalType(null);
     refreshAllData();
+
+    syncPortalItemsWithServer().then((syncedItems) => {
+      if (syncedItems && syncedItems.length > 0) {
+        setItems(syncedItems);
+      }
+    });
 
     if (result.matches.length > 0) {
       showToast(
@@ -277,16 +302,16 @@ export default function Home() {
 
             <div className="flex flex-wrap items-center gap-3 mt-5">
               <button
-                onClick={() => setReportModalType('Lost')}
-                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase tracking-wider px-5 py-3 rounded-xl shadow-lg transition-transform hover:scale-105 flex items-center gap-2"
+                onClick={() => handleOpenReportModal('Lost')}
+                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase tracking-wider px-5 py-3 rounded-xl shadow-lg transition-transform hover:scale-105 flex items-center gap-2 cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
                 I Lost An Item
               </button>
 
               <button
-                onClick={() => setReportModalType('Found')}
-                className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs uppercase tracking-wider px-5 py-3 rounded-xl shadow-lg transition-transform hover:scale-105 flex items-center gap-2"
+                onClick={() => handleOpenReportModal('Found')}
+                className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs uppercase tracking-wider px-5 py-3 rounded-xl shadow-lg transition-transform hover:scale-105 flex items-center gap-2 cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
                 I Found An Item
@@ -304,22 +329,54 @@ export default function Home() {
 
           {/* Quick Metrics Bar */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-8 pt-6 border-t border-white/10">
-            <div className="bg-white/5 backdrop-blur-md rounded-2xl p-3 border border-white/10">
+            <button
+              onClick={() => {
+                setSelectedType('Lost');
+                setActiveTab('explore');
+              }}
+              className={`text-left bg-white/5 hover:bg-white/10 p-3 rounded-2xl border transition-all cursor-pointer ${
+                selectedType === 'Lost' && activeTab === 'explore' ? 'border-amber-400 bg-white/10 ring-1 ring-amber-400/50' : 'border-white/10'
+              }`}
+            >
               <span className="text-[11px] text-slate-400 font-semibold uppercase block">Lost Items</span>
               <span className="text-2xl font-black text-amber-400">{totalLost}</span>
-            </div>
-            <div className="bg-white/5 backdrop-blur-md rounded-2xl p-3 border border-white/10">
+            </button>
+            <button
+              onClick={() => {
+                setSelectedType('Found');
+                setActiveTab('explore');
+              }}
+              className={`text-left bg-white/5 hover:bg-white/10 p-3 rounded-2xl border transition-all cursor-pointer ${
+                selectedType === 'Found' && activeTab === 'explore' ? 'border-emerald-400 bg-white/10 ring-1 ring-emerald-400/50' : 'border-white/10'
+              }`}
+            >
               <span className="text-[11px] text-slate-400 font-semibold uppercase block">Found Items</span>
               <span className="text-2xl font-black text-emerald-400">{totalFound}</span>
-            </div>
-            <div className="bg-white/5 backdrop-blur-md rounded-2xl p-3 border border-white/10">
+            </button>
+            <button
+              onClick={() => {
+                setSelectedStatus('In Handover');
+                setActiveTab('explore');
+              }}
+              className={`text-left bg-white/5 hover:bg-white/10 p-3 rounded-2xl border transition-all cursor-pointer ${
+                selectedStatus === 'In Handover' && activeTab === 'explore' ? 'border-indigo-400 bg-white/10 ring-1 ring-indigo-400/50' : 'border-white/10'
+              }`}
+            >
               <span className="text-[11px] text-slate-400 font-semibold uppercase block">At Help Desk</span>
               <span className="text-2xl font-black text-indigo-400">{totalInHandover}</span>
-            </div>
-            <div className="bg-white/5 backdrop-blur-md rounded-2xl p-3 border border-white/10">
+            </button>
+            <button
+              onClick={() => {
+                setSelectedStatus('Returned');
+                setActiveTab('explore');
+              }}
+              className={`text-left bg-white/5 hover:bg-white/10 p-3 rounded-2xl border transition-all cursor-pointer ${
+                selectedStatus === 'Returned' && activeTab === 'explore' ? 'border-white bg-white/10 ring-1 ring-white/50' : 'border-white/10'
+              }`}
+            >
               <span className="text-[11px] text-slate-400 font-semibold uppercase block">Returned &amp; Closed</span>
               <span className="text-2xl font-black text-white">{totalReturned}</span>
-            </div>
+            </button>
           </div>
         </section>
 
