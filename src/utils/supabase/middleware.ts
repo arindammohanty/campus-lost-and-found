@@ -6,12 +6,14 @@ export async function updateSession(request: NextRequest) {
     request,
   })
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  if (!supabaseUrl || !supabaseAnonKey) {
+  if (!rawUrl || !rawUrl.startsWith('http') || !supabaseAnonKey) {
     return supabaseResponse;
   }
+
+  const supabaseUrl = rawUrl;
 
   const supabase = createServerClient(
     supabaseUrl,
