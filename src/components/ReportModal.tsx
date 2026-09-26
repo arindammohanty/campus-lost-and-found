@@ -30,48 +30,7 @@ interface ReportModalProps {
   onSubmit: (itemData: any) => void;
 }
 
-const PRESET_ITEMS = [
-  {
-    name: 'Scientific Calculator',
-    type: 'Lost',
-    category: 'Electronics' as CategoryType,
-    color: 'Black',
-    brand: 'Casio',
-    description: 'Casio fx-991CW with barcode sticker',
-    img: 'https://images.unsplash.com/photo-1594980596870-8aa52a78d8cd?auto=format&fit=crop&q=80&w=800',
-    secret: 'Silver initials sticker on back lid',
-  },
-  {
-    name: 'College ID Card',
-    type: 'Lost',
-    category: 'ID Cards' as CategoryType,
-    color: 'Navy Blue',
-    brand: 'RFID Campus',
-    description: 'Student Identity smartcard with blue lanyard',
-    img: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&q=80&w=800',
-    secret: 'Transparent sticker over barcode',
-  },
-  {
-    name: 'Hostel Keys',
-    type: 'Found',
-    category: 'Keys' as CategoryType,
-    color: 'Silver',
-    brand: 'Godrej',
-    description: 'Set of 3 brass keys with Spider-Man keychain',
-    img: 'https://images.unsplash.com/photo-1582139329536-e7284fece509?auto=format&fit=crop&q=80&w=800',
-    secret: 'Room number 214 etched on one key',
-  },
-  {
-    name: 'Water Bottle',
-    type: 'Found',
-    category: 'Accessories' as CategoryType,
-    color: 'Blue',
-    brand: 'Milton',
-    description: 'Milton 750ml insulated thermos flask',
-    img: 'https://images.unsplash.com/photo-1602143407151-7111542de6e8?auto=format&fit=crop&q=80&w=800',
-    secret: 'Slight dent on the lower rim',
-  },
-];
+
 
 export const ReportModal: React.FC<ReportModalProps> = ({
   initialType = 'Lost',
@@ -166,16 +125,6 @@ export const ReportModal: React.FC<ReportModalProps> = ({
     }
   };
 
-  // 1-Click quick preset applicator for ultimate student convenience
-  const applyPreset = (preset: typeof PRESET_ITEMS[0]) => {
-    setTitle(preset.name);
-    setCategory(preset.category);
-    setColor(preset.color);
-    setBrand(preset.brand);
-    setDescription(preset.description);
-    setImageUrl(preset.img);
-    setIdentifyingDetails(preset.secret);
-  };
 
   // Smart AI Feature Detection trigger
   const triggerAiAssist = (t: string, d: string) => {
@@ -279,22 +228,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
             </button>
           </div>
 
-          {/* Quick Demo Presets for Speed */}
-          <div className="flex items-center gap-1.5 overflow-x-auto">
-            <span className="text-[11px] font-semibold text-slate-500 flex items-center gap-1">
-              <Sparkles className="w-3.5 h-3.5 text-indigo-600" /> Fast Fill:
-            </span>
-            {PRESET_ITEMS.map((p, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => applyPreset(p)}
-                className="text-[11px] font-medium bg-white hover:bg-indigo-50 hover:text-indigo-600 text-slate-700 border border-slate-200 px-2 py-0.8 rounded-md transition-colors whitespace-nowrap"
-              >
-                {p.name}
-              </button>
-            ))}
-          </div>
+
         </div>
 
         {/* Scrollable Form Body */}

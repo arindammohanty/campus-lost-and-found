@@ -21,7 +21,7 @@ import {
 
 interface SmartMatchPanelProps {
   items: Item[];
-  currentUser: User;
+  currentUser: User | null;
   onOpenItem: (item: Item) => void;
   onOpenChat: (item: Item) => void;
   onOpenHandover: (item: Item) => void;

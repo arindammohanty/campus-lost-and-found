@@ -6,7 +6,7 @@ import { MapPin, Calendar, Clock, Sparkles, MessageSquare, ShieldCheck, Tag } fr
 
 interface ItemCardProps {
   item: Item;
-  currentUser: User;
+  currentUser: User | null;
   onOpenDetails: (item: Item) => void;
   onOpenChat: (item: Item) => void;
   onOpenHandover: (item: Item) => void;
@@ -20,7 +20,7 @@ export const ItemCard: React.FC<ItemCardProps> = ({
   onOpenHandover,
 }) => {
   const isLost = item.type === 'Lost';
-  const isOwner = item.userId === currentUser.id;
+  const isOwner = currentUser ? item.userId === currentUser.id : false;
 
   const getStatusBadge = () => {
     switch (item.status) {

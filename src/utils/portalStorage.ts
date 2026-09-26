@@ -1,14 +1,14 @@
 import { Item, User, HandoverTicket, ChatMessage, PlatformNotification, ItemLifecycleStatus } from '../types/portal';
-import { INITIAL_ITEMS, SAMPLE_USERS } from '../data/campusData';
+import { INITIAL_ITEMS } from '../data/campusData';
 import { extractAIFeatures, calculateMatchScore } from './aiEngine';
 
 const STORAGE_KEYS = {
-  ITEMS: 'campus_portal_items_v2',
-  USERS: 'campus_portal_users_v2',
-  CURRENT_USER: 'campus_portal_active_user_v2',
-  TICKETS: 'campus_portal_tickets_v2',
-  MESSAGES: 'campus_portal_messages_v2',
-  NOTIFICATIONS: 'campus_portal_notifications_v2',
+  ITEMS: 'campus_portal_items_v3',
+  USERS: 'campus_portal_users_v3',
+  CURRENT_USER: 'campus_portal_active_user_v3',
+  TICKETS: 'campus_portal_tickets_v3',
+  MESSAGES: 'campus_portal_messages_v3',
+  NOTIFICATIONS: 'campus_portal_notifications_v3',
 };
 
 // Safe LocalStorage helpers
@@ -33,85 +33,17 @@ function writeStorage<T>(key: string, value: T): void {
 }
 
 /**
- * Initialize storage with rich seed data if empty
+ * Initialize storage with clean production state if empty
  */
 export function initializePortalStorage(): void {
   if (typeof window === 'undefined') return;
   const existing = localStorage.getItem(STORAGE_KEYS.ITEMS);
   if (!existing) {
-    writeStorage(STORAGE_KEYS.ITEMS, INITIAL_ITEMS);
-    writeStorage(STORAGE_KEYS.USERS, SAMPLE_USERS);
-    writeStorage(STORAGE_KEYS.CURRENT_USER, SAMPLE_USERS[0]); // Default to Arindam Mohanty
-    
-    // Seed an initial handover ticket for demonstration
-    const initialTicket: HandoverTicket = {
-      id: 'ticket-demo-1',
-      itemId: 'item-found-1',
-      itemTitle: 'Found Casio Scientific Calculator (fx-991CW)',
-      itemType: 'Found',
-      claimantId: 'user-arindam',
-      claimantName: 'Arindam Mohanty',
-      claimantEmail: 'arindam.mohanty@campus.edu',
-      claimantRoll: '250301120059',
-      secretDetailProof: 'Small silver initials sticker "AM" on the battery cover',
-      handoverCode: '482910',
-      helpDeskLocation: 'Central Library Help Desk',
-      scheduledTime: 'Today at 04:00 PM',
-      status: 'Pending Verification',
-      officerNotes: 'Claimant reported lost calculator matching serial and markings.',
-      createdAt: new Date().toISOString(),
-    };
-    writeStorage(STORAGE_KEYS.TICKETS, [initialTicket]);
-
-    // Seed initial message thread
-    const initialMessages: ChatMessage[] = [
-      {
-        id: 'msg-1',
-        itemId: 'item-lost-1',
-        senderId: 'system',
-        senderName: 'Campus Match Radar',
-        senderRole: 'helpdesk',
-        text: 'System: A 96% match was detected for this listing. Contact between finder and claimant has been securely initialized.',
-        timestamp: '2026-09-25T09:12:00Z',
-        isSystem: true,
-      },
-      {
-        id: 'msg-2',
-        itemId: 'item-lost-1',
-        threadId: 'item-lost-1_user-amrit',
-        senderId: 'user-amrit',
-        senderName: 'Finder (Amrit Rout)',
-        senderRole: 'finder',
-        text: 'Hi! I found a Casio fx-991CW calculator in the Central Library 2nd floor and handed it over to the Library Desk counter for safety.',
-        timestamp: '2026-09-25T09:15:00Z',
-      },
-      {
-        id: 'msg-3',
-        itemId: 'item-lost-1',
-        threadId: 'item-lost-1_user-amrit',
-        senderId: 'user-arindam',
-        senderName: 'Owner (Arindam Mohanty)',
-        senderRole: 'owner',
-        text: 'Thank you so much! Does it have silver AM initials on the back? I generated the help desk handover pass to pick it up.',
-        timestamp: '2026-09-25T09:18:00Z',
-      },
-    ];
-    writeStorage(STORAGE_KEYS.MESSAGES, initialMessages);
-
-    // Initial notification
-    const initialNotifications: PlatformNotification[] = [
-      {
-        id: 'notif-1',
-        userId: 'user-arindam',
-        title: 'High-Probability Match Found! (96%)',
-        message: 'Your lost Casio fx-991CW calculator matches an item deposited at Central Library Help Desk.',
-        type: 'match',
-        itemId: 'item-lost-1',
-        read: false,
-        createdAt: new Date().toISOString(),
-      },
-    ];
-    writeStorage(STORAGE_KEYS.NOTIFICATIONS, initialNotifications);
+    writeStorage(STORAGE_KEYS.ITEMS, []);
+    writeStorage(STORAGE_KEYS.USERS, []);
+    writeStorage(STORAGE_KEYS.TICKETS, []);
+    writeStorage(STORAGE_KEYS.MESSAGES, []);
+    writeStorage(STORAGE_KEYS.NOTIFICATIONS, []);
   }
 }
 
@@ -288,19 +220,53 @@ export function deletePortalItem(itemId: string): void {
 // ----------------- USER & PROFILE -----------------
 
 export function getPortalUsers(): User[] {
-  return readStorage<User[]>(STORAGE_KEYS.USERS, SAMPLE_USERS);
+  return readStorage<User[]>(STORAGE_KEYS.USERS, []);
 }
 
-export function getActiveUser(): User {
+export function getActiveUser(): User | null {
   const user = readStorage<User | null>(STORAGE_KEYS.CURRENT_USER, null);
   if (!user || !user.id || !user.name) {
-    return SAMPLE_USERS[0];
+    return null;
   }
   return user;
 }
 
 export function setActiveUser(user: User): void {
   writeStorage(STORAGE_KEYS.CURRENT_USER, user);
+}
+
+export function registerPortalUser(userData: Omit<User, 'id'> & { id?: string }): User {
+  const users = getPortalUsers();
+  const newUser: User = {
+    id: userData.id || `user-${Date.now()}`,
+    name: userData.name,
+    email: userData.email,
+    rollNumber: userData.rollNumber,
+    branch: (userData as any).branch || userData.department || 'General Academics',
+    department: userData.department || (userData as any).branch || 'General Academics',
+    role: userData.role || 'student',
+    year: userData.year,
+    phone: userData.phone,
+    avatarUrl: userData.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(userData.name)}`,
+  };
+
+  const existingIdx = users.findIndex(
+    u => (u.email && u.email.toLowerCase() === newUser.email.toLowerCase()) || 
+         (u.rollNumber && u.rollNumber.toLowerCase() === newUser.rollNumber.toLowerCase())
+  );
+  if (existingIdx >= 0) {
+    users[existingIdx] = { ...users[existingIdx], ...newUser };
+  } else {
+    users.push(newUser);
+  }
+  writeStorage(STORAGE_KEYS.USERS, users);
+  setActiveUser(newUser);
+  return newUser;
+}
+
+export function signOutPortalUser(): void {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
 }
 
 // ----------------- HANDOVER TICKETS -----------------

@@ -23,7 +23,7 @@ import {
 
 interface ItemDetailsModalProps {
   item: Item;
-  currentUser: User;
+  currentUser: User | null;
   onClose: () => void;
   onOpenChat: (item: Item) => void;
   onOpenHandover: (item: Item) => void;
@@ -49,8 +49,8 @@ export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({
   onOpenMatchRadar,
   onStatusChange,
 }) => {
-  const isOwner = item.userId === currentUser.id;
-  const isHelpDesk = currentUser.role === 'helpdesk_admin';
+  const isOwner = currentUser ? item.userId === currentUser.id : false;
+  const isHelpDesk = currentUser ? currentUser.role === 'helpdesk_admin' : false;
   const isLost = item.type === 'Lost';
 
   // Get current step index in lifecycle

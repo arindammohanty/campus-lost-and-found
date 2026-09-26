@@ -86,11 +86,13 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  rollNumber: string;
-  branch: string;
-  year: string;
-  phone: string;
-  role: 'student' | 'helpdesk_admin';
+  rollNumber: string; // Mandatory University Registration Number (e.g. 250301120059)
+  branch?: string;
+  department?: string;
+  year?: string;
+  phone?: string;
+  role: 'student' | 'staff' | 'helpdesk_admin';
+  avatarUrl?: string;
 }
 
 export interface MatchResult {

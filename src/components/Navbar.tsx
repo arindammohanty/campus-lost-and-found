@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { User, PlatformNotification } from '../types/portal';
-import { SAMPLE_USERS } from '../data/campusData';
+import { signOutPortalUser } from '../utils/portalStorage';
 import {
   Search,
   Bell,
@@ -16,11 +17,13 @@ import {
   Compass,
   CheckCircle2,
   X,
+  LogOut,
 } from 'lucide-react';
 
 interface NavbarProps {
-  currentUser: User;
-  onSwitchUser: (user: User) => void;
+  currentUser: User | null;
+  onSwitchUser?: (user: User) => void;
+  onSignOut?: () => void;
   notifications: PlatformNotification[];
   onOpenNotifications: () => void;
   onOpenReportModal: (type: 'Lost' | 'Found') => void;
@@ -33,6 +36,7 @@ interface NavbarProps {
 export const Navbar: React.FC<NavbarProps> = ({
   currentUser,
   onSwitchUser,
+  onSignOut,
   notifications,
   onOpenNotifications,
   onOpenReportModal,
@@ -59,7 +63,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <div>
               <div className="flex items-center gap-1.5">
                 <span className="font-black text-lg tracking-tight text-slate-900">
-                  Campus <span className="text-indigo-600">Lost & Found</span>
+                  Campus <span className="text-indigo-600">Lost &amp; Found</span>
                 </span>
                 <span className="text-[10px] bg-indigo-100 text-indigo-800 font-bold px-1.5 py-0.5 rounded-md">
                   AI Portal
@@ -76,7 +80,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Search lost & found items, categories, colors..."
+              placeholder="Search lost &amp; found items, categories, colors..."
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
               className="w-full pl-9 pr-4 py-2 bg-slate-100 hover:bg-slate-200/70 focus:bg-white rounded-xl text-xs border border-transparent focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition-all"
@@ -91,7 +95,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
           </div>
 
-          {/* Right Action Icons & User Switcher */}
+          {/* Right Action Icons & User Status */}
           <div className="flex items-center gap-2 sm:gap-3">
             {/* Quick Action: Report Lost */}
             <button
@@ -125,60 +129,83 @@ export const Navbar: React.FC<NavbarProps> = ({
               )}
             </button>
 
-            {/* Active User Switcher Pill (Great for Instant Testing) */}
-            <div className="relative">
-              <button
-                onClick={() => setShowUserDropdown(!showUserDropdown)}
-                className="flex items-center gap-2 p-1.5 sm:px-3 sm:py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 transition-colors text-xs font-semibold text-slate-800"
-              >
-                <div
-                  className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-white text-[10px] ${
-                    currentUser.role === 'helpdesk_admin' ? 'bg-purple-600' : 'bg-indigo-600'
-                  }`}
+            {/* User Profile or Sign In */}
+            {currentUser ? (
+              <div className="relative">
+                <button
+                  onClick={() => setShowUserDropdown(!showUserDropdown)}
+                  className="flex items-center gap-2 p-1.5 sm:px-3 sm:py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 transition-colors text-xs font-semibold text-slate-800"
                 >
-                  {currentUser.name[0]}
-                </div>
-                <div className="text-left hidden lg:block">
-                  <div className="leading-tight truncate max-w-[110px]">{currentUser.name}</div>
-                  <div className="text-[10px] text-slate-400 font-normal">
-                    {currentUser.role === 'helpdesk_admin' ? 'Help Desk Officer' : currentUser.rollNumber}
+                  <div
+                    className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-white text-[10px] ${
+                      currentUser.role === 'helpdesk_admin' ? 'bg-purple-600' : 'bg-indigo-600'
+                    }`}
+                  >
+                    {currentUser.name ? currentUser.name[0] : 'U'}
                   </div>
-                </div>
-                <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-              </button>
+                  <div className="text-left hidden lg:block">
+                    <div className="leading-tight truncate max-w-[110px]">{currentUser.name}</div>
+                    <div className="text-[10px] text-slate-400 font-normal font-mono">
+                      {currentUser.role === 'helpdesk_admin' ? 'Help Desk Officer' : currentUser.rollNumber}
+                    </div>
+                  </div>
+                  <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                </button>
 
-              {/* User Switcher Dropdown */}
-              {showUserDropdown && (
-                <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-slate-200 p-2 z-50">
-                  <div className="px-3 py-2 border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                    Switch Test User Persona
+                {/* User Dropdown */}
+                {showUserDropdown && (
+                  <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-slate-200 p-3 z-50 animate-fadeIn">
+                    <div className="pb-2.5 mb-2 border-b border-slate-100">
+                      <p className="font-bold text-xs text-slate-900">{currentUser.name}</p>
+                      <p className="text-[11px] text-indigo-600 font-mono font-bold mt-0.5">
+                        Reg: {currentUser.rollNumber}
+                      </p>
+                      <p className="text-[10px] text-slate-400 truncate mt-0.5">{currentUser.email}</p>
+                      <div className="mt-1.5 inline-block text-[10px] font-semibold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md">
+                        {currentUser.role === 'helpdesk_admin' ? 'Campus Officer' : `${currentUser.department || 'Student'}`}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <button
+                        onClick={() => {
+                          onSelectTab('my-items');
+                          setShowUserDropdown(false);
+                        }}
+                        className="w-full text-left p-2 rounded-xl hover:bg-slate-50 text-xs font-medium text-slate-700 flex items-center gap-2 transition-colors"
+                      >
+                        <Layers className="w-3.5 h-3.5 text-slate-500" />
+                        <span>My Items &amp; Activity</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          signOutPortalUser();
+                          setShowUserDropdown(false);
+                          if (onSignOut) {
+                            onSignOut();
+                          } else {
+                            window.location.reload();
+                          }
+                        }}
+                        className="w-full text-left p-2 rounded-xl hover:bg-red-50 text-xs font-medium text-red-600 flex items-center gap-2 transition-colors"
+                      >
+                        <LogOut className="w-3.5 h-3.5 text-red-500" />
+                        <span>Sign Out</span>
+                      </button>
+                    </div>
                   </div>
-                  <div className="space-y-1 mt-1">
-                    {SAMPLE_USERS.map((u) => {
-                      const isActive = u.id === currentUser.id;
-                      return (
-                        <div
-                          key={u.id}
-                          onClick={() => {
-                            onSwitchUser(u);
-                            setShowUserDropdown(false);
-                          }}
-                          className={`flex items-center justify-between p-2 rounded-xl cursor-pointer text-xs transition-colors ${
-                            isActive ? 'bg-indigo-50 text-indigo-900 font-bold' : 'hover:bg-slate-50 text-slate-700'
-                          }`}
-                        >
-                          <div>
-                            <p className="font-semibold">{u.name}</p>
-                            <p className="text-[10px] text-slate-400">{u.role === 'helpdesk_admin' ? 'Help Desk Admin' : u.rollNumber}</p>
-                          </div>
-                          {isActive && <CheckCircle2 className="w-4 h-4 text-indigo-600" />}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            ) : (
+              <Link
+                href="/login"
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-colors shadow-sm shadow-indigo-600/20"
+              >
+                <UserIcon className="w-3.5 h-3.5" />
+                <span>Sign In / Register</span>
+              </Link>
+            )}
           </div>
         </div>
 
@@ -197,13 +224,13 @@ export const Navbar: React.FC<NavbarProps> = ({
               <button
                 key={tab.id}
                 onClick={() => onSelectTab(tab.id)}
-                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg whitespace-nowrap transition-all ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all whitespace-nowrap ${
                   isCurrent
-                    ? 'bg-slate-900 text-white shadow-xs'
+                    ? 'bg-indigo-600 text-white shadow-xs'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                 }`}
               >
-                <Icon className={`w-3.5 h-3.5 ${isCurrent ? 'text-indigo-400' : 'text-slate-400'}`} />
+                <Icon className="w-3.5 h-3.5" />
                 <span>{tab.label}</span>
               </button>
             );

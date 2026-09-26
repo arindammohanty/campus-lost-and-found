@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Item,
   User,
@@ -19,10 +20,9 @@ import {
   setActiveUser,
   getPortalNotifications,
   markNotificationAsRead,
-  resetToSeedData,
   getHandoverTickets,
 } from '../utils/portalStorage';
-import { CATEGORIES, CAMPUS_LOCATIONS, SAMPLE_USERS, INITIAL_ITEMS } from '../data/campusData';
+import { CATEGORIES, CAMPUS_LOCATIONS } from '../data/campusData';
 
 // Components
 import { Navbar } from '../components/Navbar';
@@ -58,9 +58,11 @@ import {
 } from 'lucide-react';
 
 export default function Home() {
+  const router = useRouter();
+
   // 1. Initial State Initialization
-  const [currentUser, setCurrentUserState] = useState<User>(SAMPLE_USERS[0]);
-  const [items, setItems] = useState<Item[]>(INITIAL_ITEMS);
+  const [currentUser, setCurrentUserState] = useState<User | null>(null);
+  const [items, setItems] = useState<Item[]>([]);
   const [notifications, setNotifications] = useState<PlatformNotification[]>([]);
   const [activeTab, setActiveTab] = useState<'explore' | 'map' | 'matches' | 'my-items' | 'helpdesk'>('explore');
 
@@ -90,24 +92,66 @@ export default function Home() {
     }, 4500);
   };
 
-  const refreshAllData = () => {
+  const refreshAllData = (userOverride?: User | null) => {
+    const userToUse = userOverride !== undefined ? userOverride : currentUser;
     setItems(getPortalItems());
-    setNotifications(getPortalNotifications(currentUser.id));
+    if (userToUse) {
+      setNotifications(getPortalNotifications(userToUse.id));
+    } else {
+      setNotifications([]);
+    }
   };
 
   useEffect(() => {
     initializePortalStorage();
-    refreshAllData();
-  }, [currentUser.id]);
+    const active = getActiveUser();
+    setCurrentUserState(active);
+    refreshAllData(active);
+  }, []);
 
   const handleSwitchUser = (newUser: User) => {
     setActiveUser(newUser);
     setCurrentUserState(newUser);
+    refreshAllData(newUser);
     showToast(`Switched active user to: ${newUser.name} (${newUser.role})`);
+  };
+
+  const handleSignOut = () => {
+    setCurrentUserState(null);
+    refreshAllData(null);
+    showToast('Signed out of campus portal session.');
+  };
+
+  const handleOpenReportModal = (type: ItemType) => {
+    if (!currentUser) {
+      showToast('Please sign in or register with your University Registration Number to report an item.');
+      router.push('/login');
+      return;
+    }
+    setReportModalType(type);
+  };
+
+  const handleOpenChat = (item: Item) => {
+    if (!currentUser) {
+      showToast('Please sign in with your University Registration Number to access in-app chat.');
+      router.push('/login');
+      return;
+    }
+    setActiveItemForChat(item);
+  };
+
+  const handleOpenHandover = (item: Item) => {
+    if (!currentUser) {
+      showToast('Please sign in with your University Registration Number to generate or verify a handover pass.');
+      router.push('/login');
+      return;
+    }
+    setActiveItemForHandover(item);
   };
 
   // Report Submission Handler
   const handleReportSubmit = (formData: any) => {
+    if (!currentUser) return;
     const result = savePortalItem(formData, currentUser);
     setReportModalType(null);
     refreshAllData();
@@ -125,7 +169,8 @@ export default function Home() {
 
   // Status Change Handler
   const handleItemStatusChange = (itemId: string, newStatus: ItemLifecycleStatus) => {
-    updatePortalItemStatus(itemId, newStatus, `Updated by ${currentUser.name}`, currentUser.name);
+    const actor = currentUser ? currentUser.name : 'Campus Portal';
+    updatePortalItemStatus(itemId, newStatus, `Updated by ${actor}`, actor);
     refreshAllData();
     if (activeItemForDetails && activeItemForDetails.id === itemId) {
       setActiveItemForDetails({ ...activeItemForDetails, status: newStatus });
@@ -177,9 +222,10 @@ export default function Home() {
       <Navbar
         currentUser={currentUser}
         onSwitchUser={handleSwitchUser}
+        onSignOut={handleSignOut}
         notifications={notifications}
         onOpenNotifications={() => setShowNotificationsModal(true)}
-        onOpenReportModal={(type) => setReportModalType(type)}
+        onOpenReportModal={(type) => handleOpenReportModal(type)}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         activeTab={activeTab}
@@ -471,7 +517,7 @@ export default function Home() {
               </div>
 
               <button
-                onClick={() => setReportModalType('Lost')}
+                onClick={() => handleOpenReportModal('Lost')}
                 className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-xs flex items-center gap-1.5"
               >
                 <Plus className="w-3.5 h-3.5" /> Drop a Pin (Report Item)
@@ -492,8 +538,8 @@ export default function Home() {
             items={items}
             currentUser={currentUser}
             onOpenItem={(item) => setActiveItemForDetails(item)}
-            onOpenChat={(item) => setActiveItemForChat(item)}
-            onOpenHandover={(item) => setActiveItemForHandover(item)}
+            onOpenChat={(item) => handleOpenChat(item)}
+            onOpenHandover={(item) => handleOpenHandover(item)}
             focusedItem={focusedItemForMatch}
             onClearFocus={() => setFocusedItemForMatch(null)}
           />
@@ -501,78 +547,97 @@ export default function Home() {
 
         {/* TAB 4: My Items & Activity */}
         {activeTab === 'my-items' && (
-          <div className="space-y-6">
-            <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-4">
+          !currentUser ? (
+            <div className="bg-white rounded-3xl p-10 border border-slate-200 text-center max-w-md mx-auto my-8 space-y-4 shadow-sm">
+              <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto">
+                <Layers className="w-7 h-7" />
+              </div>
+              <h3 className="font-bold text-xl text-slate-900">Sign In Required</h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Please sign in with your University Registration Number to view your personal reports, active matches, and handover passes.
+              </p>
+              <button
+                onClick={() => router.push('/login')}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow-md transition-all inline-flex items-center gap-1.5"
+              >
+                <span>Sign In / Register</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider block mb-1">
+                    Student Dashboard
+                  </span>
+                  <h3 className="font-bold text-2xl text-slate-900">{currentUser.name}&apos;s Activity</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Roll No: <span className="font-mono text-slate-700">{currentUser.rollNumber}</span> • {currentUser.branch}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleOpenReportModal('Lost')}
+                    className="bg-amber-500 text-slate-950 font-bold text-xs px-4 py-2.5 rounded-xl shadow-xs"
+                  >
+                    + Report Lost Item
+                  </button>
+                  <button
+                    onClick={() => handleOpenReportModal('Found')}
+                    className="bg-emerald-600 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-xs"
+                  >
+                    + Report Found Item
+                  </button>
+                </div>
+              </div>
+
+              {/* My Lost Items */}
               <div>
-                <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider block mb-1">
-                  Student Dashboard
-                </span>
-                <h3 className="font-bold text-2xl text-slate-900">{currentUser.name}&apos;s Activity</h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Roll No: <span className="font-mono text-slate-700">{currentUser.rollNumber}</span> • {currentUser.branch}
-                </p>
+                <h4 className="font-bold text-base text-slate-900 mb-3 flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-full bg-amber-500" />
+                  My Lost Item Reports ({items.filter((i) => i.userId === currentUser.id && i.type === 'Lost').length})
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {items
+                    .filter((i) => i.userId === currentUser.id && i.type === 'Lost')
+                    .map((item) => (
+                      <ItemCard
+                        key={item.id}
+                        item={item}
+                        currentUser={currentUser}
+                        onOpenDetails={(i) => setActiveItemForDetails(i)}
+                        onOpenChat={(i) => handleOpenChat(i)}
+                        onOpenHandover={(i) => handleOpenHandover(i)}
+                      />
+                    ))}
+                </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setReportModalType('Lost')}
-                  className="bg-amber-500 text-slate-950 font-bold text-xs px-4 py-2.5 rounded-xl shadow-xs"
-                >
-                  + Report Lost Item
-                </button>
-                <button
-                  onClick={() => setReportModalType('Found')}
-                  className="bg-emerald-600 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-xs"
-                >
-                  + Report Found Item
-                </button>
+              {/* My Found Reports */}
+              <div className="pt-4 border-t border-slate-200">
+                <h4 className="font-bold text-base text-slate-900 mb-3 flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-full bg-emerald-500" />
+                  My Found Submissions ({items.filter((i) => i.userId === currentUser.id && i.type === 'Found').length})
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {items
+                    .filter((i) => i.userId === currentUser.id && i.type === 'Found')
+                    .map((item) => (
+                      <ItemCard
+                        key={item.id}
+                        item={item}
+                        currentUser={currentUser}
+                        onOpenDetails={(i) => setActiveItemForDetails(i)}
+                        onOpenChat={(i) => handleOpenChat(i)}
+                        onOpenHandover={(i) => handleOpenHandover(i)}
+                      />
+                    ))}
+                </div>
               </div>
             </div>
-
-            {/* My Lost Items */}
-            <div>
-              <h4 className="font-bold text-base text-slate-900 mb-3 flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-amber-500" />
-                My Lost Item Reports ({items.filter((i) => i.userId === currentUser.id && i.type === 'Lost').length})
-              </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {items
-                  .filter((i) => i.userId === currentUser.id && i.type === 'Lost')
-                  .map((item) => (
-                    <ItemCard
-                      key={item.id}
-                      item={item}
-                      currentUser={currentUser}
-                      onOpenDetails={(i) => setActiveItemForDetails(i)}
-                      onOpenChat={(i) => setActiveItemForChat(i)}
-                      onOpenHandover={(i) => setActiveItemForHandover(i)}
-                    />
-                  ))}
-              </div>
-            </div>
-
-            {/* My Found Reports */}
-            <div className="pt-4 border-t border-slate-200">
-              <h4 className="font-bold text-base text-slate-900 mb-3 flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-emerald-500" />
-                My Found Submissions ({items.filter((i) => i.userId === currentUser.id && i.type === 'Found').length})
-              </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {items
-                  .filter((i) => i.userId === currentUser.id && i.type === 'Found')
-                  .map((item) => (
-                    <ItemCard
-                      key={item.id}
-                      item={item}
-                      currentUser={currentUser}
-                      onOpenDetails={(i) => setActiveItemForDetails(i)}
-                      onOpenChat={(i) => setActiveItemForChat(i)}
-                      onOpenHandover={(i) => setActiveItemForHandover(i)}
-                    />
-                  ))}
-              </div>
-            </div>
-          </div>
+          )
         )}
 
         {/* TAB 5: Campus Help Desk Handover View */}
@@ -593,9 +658,11 @@ export default function Home() {
 
               <div className="text-right">
                 <span className="text-xs text-slate-400 block font-medium">
-                  Logged in as {currentUser.role === 'helpdesk_admin' ? 'Officer' : 'Student'}:
+                  Logged in as:
                 </span>
-                <span className="text-sm font-bold text-amber-400">{currentUser.name}</span>
+                <span className="text-sm font-bold text-amber-400">
+                  {currentUser ? `${currentUser.name} (${currentUser.role === 'helpdesk_admin' ? 'Officer' : 'Student'})` : 'Guest / Visitor'}
+                </span>
               </div>
             </div>
 
@@ -643,7 +710,7 @@ export default function Home() {
                             <span className="text-[10px] text-slate-400 uppercase font-bold block">
                               Handover PIN
                             </span>
-                            {currentUser.role === 'helpdesk_admin' || currentUser.id === item.userId ? (
+                            {currentUser && (currentUser.role === 'helpdesk_admin' || currentUser.id === item.userId) ? (
                               <span className="text-base font-black font-mono tracking-widest text-indigo-700">
                                 {item.handoverCode || '482910'}
                               </span>
@@ -655,13 +722,13 @@ export default function Home() {
                           </div>
 
                           <button
-                            onClick={() => setActiveItemForHandover(item)}
+                            onClick={() => handleOpenHandover(item)}
                             className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-xs flex items-center gap-1"
                           >
                             <QrCode className="w-4 h-4" />
-                            {currentUser.role === 'helpdesk_admin'
+                            {currentUser?.role === 'helpdesk_admin'
                               ? 'Open Desk Verifier'
-                              : currentUser.id === item.userId
+                              : currentUser?.id === item.userId
                               ? 'View My Pass'
                               : 'Claim Item'}
                           </button>
@@ -672,18 +739,17 @@ export default function Home() {
               )}
             </div>
 
-            {/* Quick Demo Reset Button for testing */}
+            {/* Live Data Reload */}
             <div className="text-center pt-6">
               <button
                 onClick={() => {
-                  resetToSeedData();
                   refreshAllData();
-                  showToast('Database reset to initial sample campus state.');
+                  showToast('Portal feed reloaded.');
                 }}
                 className="text-xs font-semibold text-slate-400 hover:text-slate-600 inline-flex items-center gap-1.5 transition-colors"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
-                Reset Portal to Sample Seed Data
+                Reload Live Feed
               </button>
             </div>
           </div>
@@ -691,7 +757,7 @@ export default function Home() {
       </main>
 
       {/* MODAL 1: Report Lost / Found Item Wizard */}
-      {reportModalType && (
+      {reportModalType && currentUser && (
         <ReportModal
           initialType={reportModalType}
           currentUser={currentUser}
@@ -708,11 +774,11 @@ export default function Home() {
           onClose={() => setActiveItemForDetails(null)}
           onOpenChat={(i) => {
             setActiveItemForDetails(null);
-            setActiveItemForChat(i);
+            handleOpenChat(i);
           }}
           onOpenHandover={(i) => {
             setActiveItemForDetails(null);
-            setActiveItemForHandover(i);
+            handleOpenHandover(i);
           }}
           onOpenMatchRadar={(i) => {
             setActiveItemForDetails(null);
@@ -724,20 +790,20 @@ export default function Home() {
       )}
 
       {/* MODAL 3: In-App Secure Chat Modal */}
-      {activeItemForChat && (
+      {activeItemForChat && currentUser && (
         <SecureChatModal
           item={activeItemForChat}
           currentUser={currentUser}
           onClose={() => setActiveItemForChat(null)}
           onOpenHandover={(i) => {
             setActiveItemForChat(null);
-            setActiveItemForHandover(i);
+            handleOpenHandover(i);
           }}
         />
       )}
 
       {/* MODAL 4: Campus Help Desk Handover Modal */}
-      {activeItemForHandover && (
+      {activeItemForHandover && currentUser && (
         <HandoverModal
           item={activeItemForHandover}
           currentUser={currentUser}
