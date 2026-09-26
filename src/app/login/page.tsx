@@ -93,8 +93,8 @@ export default function LoginPage() {
 
         setSuccessMessage(`Signed in as ${newUser.name}. Redirecting...`);
         setTimeout(() => {
-          router.push('/');
-        }, 800);
+          window.location.href = '/';
+        }, 400);
       }
     } catch (err: any) {
       setErrorMessage(err?.message || 'Failed to authenticate. Please check credentials.');
@@ -159,8 +159,8 @@ export default function LoginPage() {
 
       setSuccessMessage(`Account registered successfully for ${newUser.name} (Reg: ${newUser.rollNumber})! Redirecting...`);
       setTimeout(() => {
-        router.push('/');
-      }, 900);
+        window.location.href = '/';
+      }, 400);
     } catch (err: any) {
       setErrorMessage(err?.message || 'Failed to register account. Please try again.');
     } finally {
@@ -426,6 +426,19 @@ export default function LoginPage() {
               </div>
             </div>
 
+            {errorMessage && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-3.5 py-2.5 rounded-xl text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
+            {successMessage && (
+              <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-3.5 py-2.5 rounded-xl text-xs flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                <span>{successMessage}</span>
+              </div>
+            )}
+
             <button
               type="submit"
               disabled={loading}
@@ -476,6 +489,19 @@ export default function LoginPage() {
                 />
               </div>
             </div>
+
+            {errorMessage && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-3.5 py-2.5 rounded-xl text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
+            {successMessage && (
+              <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-3.5 py-2.5 rounded-xl text-xs flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                <span>{successMessage}</span>
+              </div>
+            )}
 
             <button
               type="submit"

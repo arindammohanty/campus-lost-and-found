@@ -34,6 +34,7 @@ import { ItemDetailsModal } from '../components/ItemDetailsModal';
 import { SecureChatModal } from '../components/SecureChatModal';
 import { HandoverModal } from '../components/HandoverModal';
 import { NotificationsModal } from '../components/NotificationsModal';
+import { AuthModal } from '../components/AuthModal';
 
 // Icons
 import {
@@ -81,6 +82,8 @@ export default function Home() {
   const [activeItemForHandover, setActiveItemForHandover] = useState<Item | null>(null);
   const [focusedItemForMatch, setFocusedItemForMatch] = useState<Item | null>(null);
   const [showNotificationsModal, setShowNotificationsModal] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authModalTab, setAuthModalTab] = useState<'signin' | 'signup'>('signin');
 
   // 4. Toast Message
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -125,7 +128,8 @@ export default function Home() {
   const handleOpenReportModal = (type: ItemType) => {
     if (!currentUser) {
       showToast('Please sign in or register with your University Registration Number to report an item.');
-      router.push('/login');
+      setAuthModalTab('signup');
+      setShowAuthModal(true);
       return;
     }
     setReportModalType(type);
@@ -134,7 +138,8 @@ export default function Home() {
   const handleOpenChat = (item: Item) => {
     if (!currentUser) {
       showToast('Please sign in with your University Registration Number to access in-app chat.');
-      router.push('/login');
+      setAuthModalTab('signin');
+      setShowAuthModal(true);
       return;
     }
     setActiveItemForChat(item);
@@ -143,7 +148,8 @@ export default function Home() {
   const handleOpenHandover = (item: Item) => {
     if (!currentUser) {
       showToast('Please sign in with your University Registration Number to generate or verify a handover pass.');
-      router.push('/login');
+      setAuthModalTab('signin');
+      setShowAuthModal(true);
       return;
     }
     setActiveItemForHandover(item);
@@ -226,6 +232,10 @@ export default function Home() {
         notifications={notifications}
         onOpenNotifications={() => setShowNotificationsModal(true)}
         onOpenReportModal={(type) => handleOpenReportModal(type)}
+        onOpenAuthModal={() => {
+          setAuthModalTab('signin');
+          setShowAuthModal(true);
+        }}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         activeTab={activeTab}
@@ -557,7 +567,10 @@ export default function Home() {
                 Please sign in with your University Registration Number to view your personal reports, active matches, and handover passes.
               </p>
               <button
-                onClick={() => router.push('/login')}
+                onClick={() => {
+                  setAuthModalTab('signin');
+                  setShowAuthModal(true);
+                }}
                 className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow-md transition-all inline-flex items-center gap-1.5"
               >
                 <span>Sign In / Register</span>
@@ -831,6 +844,18 @@ export default function Home() {
           }}
         />
       )}
+
+      {/* MODAL 6: University Portal Authentication Modal */}
+      <AuthModal
+        isOpen={showAuthModal}
+        initialTab={authModalTab}
+        onClose={() => setShowAuthModal(false)}
+        onSuccess={(user) => {
+          setCurrentUserState(user);
+          refreshAllData(user);
+          showToast(`Welcome back, ${user.name}!`);
+        }}
+      />
     </div>
   );
 }

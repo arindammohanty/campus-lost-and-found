@@ -22,6 +22,7 @@ import {
 
 interface NavbarProps {
   currentUser: User | null;
+  onOpenAuthModal?: () => void;
   onSwitchUser?: (user: User) => void;
   onSignOut?: () => void;
   notifications: PlatformNotification[];
@@ -35,6 +36,7 @@ interface NavbarProps {
 
 export const Navbar: React.FC<NavbarProps> = ({
   currentUser,
+  onOpenAuthModal,
   onSwitchUser,
   onSignOut,
   notifications,
@@ -198,13 +200,20 @@ export const Navbar: React.FC<NavbarProps> = ({
                 )}
               </div>
             ) : (
-              <Link
-                href="/login"
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-colors shadow-sm shadow-indigo-600/20"
+              <button
+                type="button"
+                onClick={() => {
+                  if (onOpenAuthModal) {
+                    onOpenAuthModal();
+                  } else {
+                    window.location.href = '/login';
+                  }
+                }}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold text-xs transition-colors shadow-sm shadow-indigo-600/20 cursor-pointer"
               >
                 <UserIcon className="w-3.5 h-3.5" />
                 <span>Sign In / Register</span>
-              </Link>
+              </button>
             )}
           </div>
         </div>

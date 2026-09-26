@@ -52,12 +52,5 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // redirect to home if already logged in and visiting /login
-  if (user && request.nextUrl.pathname === '/login') {
-    const url = request.nextUrl.clone()
-    url.pathname = '/'
-    return NextResponse.redirect(url)
-  }
-
   return supabaseResponse
 }
