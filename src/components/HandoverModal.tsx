@@ -9,6 +9,7 @@ import {
   verifyHandoverAtDesk,
   isItemOwnedByUser,
   acceptClaimRequest,
+  ADMIN_CREDENTIALS,
 } from '../utils/portalStorage';
 import QRCode from 'qrcode';
 import {
@@ -38,7 +39,8 @@ export const HandoverModal: React.FC<HandoverModalProps> = ({
   onClose,
   onSuccess,
 }) => {
-  const isHelpDeskOfficer = currentUser.role === 'helpdesk_admin';
+  const isHelpDeskOfficer =
+    currentUser.role === 'helpdesk_admin' || currentUser.email === ADMIN_CREDENTIALS.email;
   const [activeTab, setActiveTab] = useState<'pass' | 'verify'>(
     isHelpDeskOfficer ? 'verify' : 'pass'
   );

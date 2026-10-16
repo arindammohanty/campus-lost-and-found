@@ -30,6 +30,7 @@ import {
   acceptClaimRequest,
   rejectClaimRequest,
   verifyHandoverAtDesk,
+  findPairedItems,
   ADMIN_CREDENTIALS,
   ADMIN_USER,
   signOutPortalUser,
@@ -73,6 +74,9 @@ import {
   Archive,
   Lock,
   AlertCircle,
+  ShieldAlert,
+  Building,
+  Link2,
 } from 'lucide-react';
 
 export default function Home() {
@@ -142,12 +146,11 @@ export default function Home() {
   const handleAcceptClaim = (ticketId: string) => {
     const officerName = currentUser?.name || 'Arindam Mohanty';
     const res = acceptClaimRequest(ticketId, officerName);
-    if (res.success) {
-      showToast(res.message);
-      refreshAllData();
-    } else {
-      showToast(res.message);
-    }
+    showToast(res.message);
+    refreshAllData();
+    syncPortalItemsWithServer().then((synced) => {
+      if (synced && synced.length > 0) setItems(synced);
+    });
   };
 
   const handleRejectClaim = (ticketId: string) => {
@@ -167,6 +170,9 @@ export default function Home() {
       showToast(res.message);
       setCounterPinInput('');
       refreshAllData();
+      syncPortalItemsWithServer().then((synced) => {
+        if (synced && synced.length > 0) setItems(synced);
+      });
     } else {
       setCounterVerifyMessage({ text: res.message, type: 'error' });
     }
@@ -310,12 +316,20 @@ export default function Home() {
   // Status Change Handler
   const handleItemStatusChange = (itemId: string, newStatus: ItemLifecycleStatus) => {
     const actor = currentUser ? currentUser.name : 'Campus Portal';
+    const target = items.find((i) => i.id === itemId);
+    const paired = target ? findPairedItems(target, items) : [];
+
     updatePortalItemStatus(itemId, newStatus, `Updated by ${actor}`, actor);
     refreshAllData();
     if (activeItemForDetails && activeItemForDetails.id === itemId) {
       setActiveItemForDetails({ ...activeItemForDetails, status: newStatus });
     }
-    showToast(`Updated item status to: ${newStatus}`);
+
+    if (newStatus === 'Returned' && paired.length > 0) {
+      showToast(`Updated item and synchronized paired item "${paired[0].title}" to Returned!`);
+    } else {
+      showToast(`Updated item status to: ${newStatus}`);
+    }
   };
 
   // Deduplicated unique items failsafe
@@ -1007,409 +1021,683 @@ export default function Home() {
         {/* TAB 5: Campus Help Desk Handover & Collection Claims Management View */}
         {activeTab === 'helpdesk' && (
           <div className="space-y-6">
-            {/* Header Banner */}
-            <div className="bg-gradient-to-r from-indigo-950 via-slate-900 to-indigo-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl flex flex-wrap items-center justify-between gap-6">
-              <div className="max-w-2xl">
-                <span className="bg-indigo-500/20 text-indigo-300 font-bold text-[10px] uppercase tracking-wider px-3 py-1 rounded-full border border-indigo-500/30 flex items-center gap-1.5 w-fit mb-3">
-                  <ShieldCheck className="w-4 h-4 text-indigo-400" />
-                  Official Campus Operations
-                </span>
-                <h3 className="font-black text-2xl sm:text-3xl text-white tracking-tight">
-                  Campus Collection Desks &amp; Claims Operations
-                </h3>
-                <p className="text-xs sm:text-sm text-slate-300 mt-2 leading-relaxed">
-                  Authorized collection and verification center. Review and accept student claims for found items,
-                  verify secret ownership details, and authorize safe physical collection at campus help desks.
-                </p>
+            {/* Gating Check 1: User is NOT Signed In */}
+            {!currentUser ? (
+              <div className="space-y-6">
+                {/* Locked Officer Gate Screen */}
+                <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-8 sm:p-12 text-white shadow-2xl border border-indigo-500/20 text-center max-w-3xl mx-auto">
+                  <div className="w-20 h-20 rounded-3xl bg-indigo-500/10 border border-indigo-400/30 text-amber-400 flex items-center justify-center mx-auto mb-6 shadow-inner">
+                    <Lock className="w-10 h-10" />
+                  </div>
 
-                {/* Admin Status Pill */}
-                <div className="mt-4 flex flex-wrap items-center gap-3">
-                  {currentUser?.role === 'helpdesk_admin' || currentUser?.email === ADMIN_CREDENTIALS.email ? (
-                    <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-3 py-1.5 flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                      <span className="text-xs font-bold text-emerald-300">
-                        Admin Authorized: {currentUser.name} ({currentUser.email})
-                      </span>
+                  <span className="bg-amber-400/10 text-amber-300 font-bold text-xs uppercase tracking-widest px-3.5 py-1.5 rounded-full border border-amber-400/30 inline-flex items-center gap-1.5 mb-3">
+                    <ShieldAlert className="w-4 h-4 text-amber-400" />
+                    Restricted Campus Desk Area
+                  </span>
+
+                  <h3 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+                    Campus Collection Desk Authentication Required
+                  </h3>
+
+                  <p className="text-slate-300 text-sm mt-3 leading-relaxed max-w-xl mx-auto">
+                    To protect student privacy, confidential ownership proofs, and physical collection handover codes, this console is strictly restricted to authorized Campus Collection Desk Officers and registered student claimants.
+                  </p>
+
+                  {/* Two Clear Call-to-Action Buttons */}
+                  <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
+                    <button
+                      onClick={handleAdminQuickLogin}
+                      className="bg-amber-400 hover:bg-amber-300 active:bg-amber-500 text-slate-950 font-black text-sm px-6 py-3.5 rounded-2xl transition-all shadow-lg shadow-amber-400/20 flex items-center gap-2"
+                    >
+                      <ShieldCheck className="w-5 h-5 text-slate-950" />
+                      <span>Sign In as Collection Desk Officer</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setAuthModalTab('signin');
+                        setShowAuthModal(true);
+                      }}
+                      className="bg-white/10 hover:bg-white/20 active:bg-white/30 text-white font-bold text-sm px-6 py-3.5 rounded-2xl border border-white/20 transition-all flex items-center gap-2"
+                    >
+                      <UserCheck className="w-5 h-5 text-indigo-300" />
+                      <span>Student Sign In (View My Passes)</span>
+                    </button>
+                  </div>
+
+                  {/* Campus Help Desk Operational Information */}
+                  <div className="mt-10 pt-8 border-t border-white/10 grid grid-cols-1 sm:grid-cols-3 gap-4 text-left">
+                    <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
+                      <Building className="w-5 h-5 text-indigo-400 mb-2" />
+                      <h5 className="font-bold text-xs text-white">Central Library Desk</h5>
+                      <p className="text-[11px] text-slate-400 mt-1">Ground Floor Circulation Counter • 09:00 AM – 06:00 PM</p>
                     </div>
-                  ) : (
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-amber-300 font-medium">
-                        Student / Guest View (Read-Only Claim Tracking)
-                      </span>
+                    <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
+                      <Building className="w-5 h-5 text-indigo-400 mb-2" />
+                      <h5 className="font-bold text-xs text-white">Student Center Desk</h5>
+                      <p className="text-[11px] text-slate-400 mt-1">Cafeteria Foyer Operations • 08:30 AM – 08:00 PM</p>
+                    </div>
+                    <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
+                      <Building className="w-5 h-5 text-indigo-400 mb-2" />
+                      <h5 className="font-bold text-xs text-white">Security HQ Desk</h5>
+                      <p className="text-[11px] text-slate-400 mt-1">Admin Building Room 102 • 24/7 Campus Security</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : currentUser.role !== 'helpdesk_admin' && currentUser.email !== ADMIN_CREDENTIALS.email ? (
+              /* Gating Check 2: Regular Student Logged In */
+              <div className="space-y-6">
+                {/* Student Personal Passes Header */}
+                <div className="bg-gradient-to-r from-indigo-900 via-slate-900 to-indigo-950 rounded-3xl p-6 sm:p-8 text-white shadow-xl flex flex-wrap items-center justify-between gap-6">
+                  <div className="max-w-2xl">
+                    <span className="bg-indigo-500/20 text-indigo-300 font-bold text-[10px] uppercase tracking-wider px-3 py-1 rounded-full border border-indigo-500/30 flex items-center gap-1.5 w-fit mb-3">
+                      <UserCheck className="w-4 h-4 text-indigo-400" />
+                      Student Portal • My Collection Passes
+                    </span>
+                    <h3 className="font-black text-2xl sm:text-3xl text-white tracking-tight">
+                      My Campus Collection Passes &amp; Claims
+                    </h3>
+                    <p className="text-xs sm:text-sm text-slate-300 mt-2 leading-relaxed">
+                      Track the status of your item collection requests. Present your 6-digit Handover PIN or QR pass at the assigned Help Desk counter with your Student ID card to claim your property.
+                    </p>
+
+                    <div className="mt-4 flex flex-wrap items-center gap-3">
+                      <div className="bg-white/10 border border-white/20 rounded-xl px-3 py-1.5 flex items-center gap-2">
+                        <span className="text-xs font-bold text-slate-200">
+                          Student: {currentUser.name} (Reg No: <code className="font-mono text-amber-300">{currentUser.rollNumber}</code>)
+                        </span>
+                      </div>
                       <button
                         onClick={handleAdminQuickLogin}
-                        className="bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs px-3.5 py-1.5 rounded-xl transition-all shadow-md flex items-center gap-1.5"
+                        className="bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 border border-amber-400/40 text-xs font-bold px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5"
                       >
                         <ShieldCheck className="w-3.5 h-3.5" />
-                        Sign In as Collection Desk Admin
+                        Switch to Officer Mode
                       </button>
+                    </div>
+                  </div>
+
+                  <div className="bg-white/5 border border-white/10 rounded-2xl p-4 sm:p-5 text-right backdrop-blur-xs min-w-[200px]">
+                    <span className="text-[11px] text-slate-400 block font-medium uppercase tracking-wider">
+                      Student Session
+                    </span>
+                    <span className="text-base font-bold text-white block mt-0.5">{currentUser.name}</span>
+                    <span className="text-xs font-mono text-indigo-300 block">{currentUser.email}</span>
+                    <button
+                      onClick={handleSignOut}
+                      className="text-[11px] font-bold text-rose-300 hover:text-rose-200 underline mt-2 block ml-auto transition-colors"
+                    >
+                      Sign Out
+                    </button>
+                  </div>
+                </div>
+
+                {/* Student's Own Claim Tickets */}
+                {(() => {
+                  const myTickets = tickets.filter(
+                    (t) =>
+                      t.claimantId === currentUser.id ||
+                      (t.claimantRoll && currentUser.rollNumber && t.claimantRoll.trim().toLowerCase() === currentUser.rollNumber.trim().toLowerCase()) ||
+                      (t.claimantEmail && currentUser.email && t.claimantEmail.trim().toLowerCase() === currentUser.email.trim().toLowerCase())
+                  );
+
+                  if (myTickets.length === 0) {
+                    return (
+                      <div className="bg-white rounded-3xl border border-slate-200 p-10 text-center shadow-xs">
+                        <PackageSearch className="w-12 h-12 text-indigo-400 mx-auto mb-3 opacity-80" />
+                        <h4 className="font-bold text-base text-slate-900">No Active Collection Passes</h4>
+                        <p className="text-xs text-slate-500 max-w-md mx-auto mt-1 leading-relaxed">
+                          You haven't requested any campus collection passes yet. If you spot your lost item in the Found listings, open the item and click &quot;Request Collection Pass&quot; or chat with the finder to initiate a safe help desk handover.
+                        </p>
+                        <button
+                          onClick={() => setActiveTab('explore')}
+                          className="mt-5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl transition-all shadow-md"
+                        >
+                          Browse Active Listings
+                        </button>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-4">
+                      <h4 className="font-bold text-base text-slate-900 flex items-center gap-2">
+                        <QrCode className="w-5 h-5 text-indigo-600" />
+                        My Active Collection Passes ({myTickets.length})
+                      </h4>
+
+                      <div className="grid grid-cols-1 gap-4">
+                        {myTickets.map((ticket) => {
+                          const associatedItem = items.find((i) => i.id === ticket.itemId);
+                          const isPending = ticket.status === 'Pending Verification';
+                          const isCompleted = ticket.status === 'Completed';
+
+                          return (
+                            <div
+                              key={ticket.id}
+                              className={`rounded-2xl border p-5 ${
+                                isPending
+                                  ? 'bg-amber-50/30 border-amber-200'
+                                  : isCompleted
+                                  ? 'bg-emerald-50/20 border-emerald-200'
+                                  : 'bg-slate-50 border-slate-200'
+                              }`}
+                            >
+                              <div className="flex flex-wrap items-start justify-between gap-4">
+                                <div className="flex items-start gap-4">
+                                  {associatedItem?.imageUrl ? (
+                                    <img
+                                      src={associatedItem.imageUrl}
+                                      alt={ticket.itemTitle}
+                                      className="w-16 h-16 rounded-2xl object-cover shrink-0 border border-slate-200"
+                                    />
+                                  ) : (
+                                    <div className="w-16 h-16 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
+                                      <Package className="w-7 h-7" />
+                                    </div>
+                                  )}
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[10px] font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full uppercase">
+                                        {ticket.itemType} Pass
+                                      </span>
+                                      <span
+                                        className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
+                                          isPending
+                                            ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                            : isCompleted
+                                            ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                                            : 'bg-rose-100 text-rose-900 border border-rose-300'
+                                        }`}
+                                      >
+                                        {ticket.status}
+                                      </span>
+                                    </div>
+                                    <h5 className="font-bold text-base text-slate-900 mt-1">{ticket.itemTitle}</h5>
+                                    <p className="text-xs text-slate-600 mt-0.5">
+                                      🏢 Pickup Counter: <strong>{ticket.helpDeskLocation}</strong>
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-3 text-center min-w-[140px]">
+                                  <span className="text-[10px] font-bold text-indigo-600 uppercase block">
+                                    Your Handover PIN
+                                  </span>
+                                  <span className="text-2xl font-black font-mono tracking-widest text-indigo-900">
+                                    {ticket.handoverCode}
+                                  </span>
+                                  <span className="text-[10px] text-indigo-500 block mt-0.5">Show this at counter</span>
+                                </div>
+                              </div>
+
+                              {ticket.secretDetailProof && (
+                                <div className="mt-3 bg-white border border-slate-200 rounded-xl p-3">
+                                  <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">
+                                    Your Submitted Ownership Proof:
+                                  </span>
+                                  <p className="text-xs text-slate-700 italic">&quot;{ticket.secretDetailProof}&quot;</p>
+                                </div>
+                              )}
+
+                              {ticket.officerNotes && (
+                                <p className="text-xs text-slate-600 mt-2 bg-slate-100 p-2.5 rounded-xl">
+                                  📝 <strong>Officer Update:</strong> {ticket.officerNotes}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Items Owned by Current Student in Handover */}
+                {(() => {
+                  const myHandoverItems = items.filter(
+                    (i) => i.status === 'In Handover' && isItemOwnedByUser(i, currentUser)
+                  );
+                  if (myHandoverItems.length === 0) return null;
+
+                  return (
+                    <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-3">
+                      <h4 className="font-bold text-base text-slate-900 flex items-center gap-2">
+                        <ShieldCheck className="w-5 h-5 text-indigo-600" />
+                        My Items Awaiting Verification at Help Desk Counters
+                      </h4>
+
+                      <div className="space-y-3">
+                        {myHandoverItems.map((item) => (
+                          <div
+                            key={item.id}
+                            className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4"
+                          >
+                            <div className="flex items-center gap-3">
+                              <img
+                                src={item.imageUrl}
+                                alt={item.title}
+                                className="w-14 h-14 rounded-xl object-cover shrink-0 border border-slate-200"
+                              />
+                              <div>
+                                <span className="text-[10px] font-bold text-indigo-600 uppercase">
+                                  {item.category} • {item.location}
+                                </span>
+                                <h5 className="font-bold text-sm text-slate-900">{item.title}</h5>
+                                <p className="text-xs text-slate-500">Status: {item.status}</p>
+                              </div>
+                            </div>
+
+                            <button
+                              onClick={() => handleOpenHandover(item)}
+                              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-xs flex items-center gap-1"
+                            >
+                              <QrCode className="w-4 h-4" />
+                              View My Pass
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            ) : (
+              /* Gating Check 3: Authorized Campus Desk Officer / Admin */
+              <div className="space-y-6">
+                {/* Header Banner */}
+                <div className="bg-gradient-to-r from-indigo-950 via-slate-900 to-indigo-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl flex flex-wrap items-center justify-between gap-6">
+                  <div className="max-w-2xl">
+                    <span className="bg-indigo-500/20 text-indigo-300 font-bold text-[10px] uppercase tracking-wider px-3 py-1 rounded-full border border-indigo-500/30 flex items-center gap-1.5 w-fit mb-3">
+                      <ShieldCheck className="w-4 h-4 text-indigo-400" />
+                      Official Campus Operations
+                    </span>
+                    <h3 className="font-black text-2xl sm:text-3xl text-white tracking-tight">
+                      Campus Collection Desks &amp; Claims Operations
+                    </h3>
+                    <p className="text-xs sm:text-sm text-slate-300 mt-2 leading-relaxed">
+                      Authorized collection and verification center. Review and accept student claims for found items,
+                      verify secret ownership details, and authorize safe physical collection at campus help desks.
+                    </p>
+
+                    {/* Admin Status Pill */}
+                    <div className="mt-4 flex flex-wrap items-center gap-3">
+                      <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-3 py-1.5 flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                        <span className="text-xs font-bold text-emerald-300">
+                          Admin Authorized: {currentUser.name} ({currentUser.email})
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white/5 border border-white/10 rounded-2xl p-4 sm:p-5 text-right backdrop-blur-xs min-w-[220px]">
+                    <span className="text-[11px] text-slate-400 block font-medium uppercase tracking-wider">
+                      Active Officer Session
+                    </span>
+                    <span className="text-base font-bold text-white block mt-0.5">{currentUser.name}</span>
+                    <span className="text-xs font-mono text-amber-400 block">
+                      🛡️ Campus Collection Desk Officer
+                    </span>
+                    <button
+                      onClick={() => {
+                        signOutPortalUser();
+                        setCurrentUserState(null);
+                        refreshAllData(null);
+                        showToast('Signed out of officer session.');
+                      }}
+                      className="text-[11px] font-bold text-slate-400 hover:text-rose-300 underline mt-2 block ml-auto transition-colors"
+                    >
+                      Sign Out
+                    </button>
+                  </div>
+                </div>
+
+                {/* SECTION 1: INCOMING COLLECTION REQUESTS & CLAIMS */}
+                <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-5">
+                  <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-indigo-600" />
+                        <h4 className="font-bold text-lg text-slate-900">
+                          Collection Requests &amp; Student Claims
+                        </h4>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Students submit claims with secret ownership proof to collect items at designated desks.
+                      </p>
+                    </div>
+
+                    {/* Filter Pills */}
+                    <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
+                      {(['All', 'Pending Verification', 'Completed', 'Rejected'] as const).map((st) => (
+                        <button
+                          key={st}
+                          onClick={() => setClaimStatusFilter(st)}
+                          className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
+                            claimStatusFilter === st
+                              ? 'bg-white text-slate-900 shadow-xs'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          {st === 'All' ? 'All Claims' : st}
+                          {st === 'Pending Verification' && (
+                            <span className="ml-1.5 bg-amber-100 text-amber-800 text-[10px] px-1.5 py-0.2 rounded-full font-mono">
+                              {tickets.filter((t) => t.status === 'Pending Verification').length}
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Tickets List */}
+                  {(() => {
+                    const filteredTickets = tickets.filter((t) =>
+                      claimStatusFilter === 'All' ? true : t.status === claimStatusFilter
+                    );
+
+                    if (filteredTickets.length === 0) {
+                      return (
+                        <div className="text-center py-12 text-slate-400">
+                          <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-2 opacity-80" />
+                          <p className="text-sm font-bold text-slate-700">No collection requests found</p>
+                          <p className="text-xs text-slate-500 mt-1">
+                            {claimStatusFilter === 'All'
+                              ? 'No student claims currently filed for campus collection desks.'
+                              : `No claims matching filter "${claimStatusFilter}".`}
+                          </p>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="grid grid-cols-1 gap-4">
+                        {filteredTickets.map((ticket) => {
+                          const associatedItem = items.find((i) => i.id === ticket.itemId);
+                          const pairedItems = associatedItem ? findPairedItems(associatedItem, items) : [];
+                          const isPending = ticket.status === 'Pending Verification';
+                          const isCompleted = ticket.status === 'Completed';
+                          const isRejected = ticket.status === 'Rejected';
+
+                          return (
+                            <div
+                              key={ticket.id}
+                              className={`rounded-2xl border p-5 transition-all ${
+                                isPending
+                                  ? 'bg-amber-50/30 border-amber-200 ring-1 ring-amber-300/40'
+                                  : isCompleted
+                                  ? 'bg-emerald-50/20 border-emerald-200'
+                                  : 'bg-slate-50 border-slate-200 opacity-75'
+                              }`}
+                            >
+                              <div className="flex flex-wrap items-start justify-between gap-4">
+                                {/* Left: Item & Claimant info */}
+                                <div className="flex items-start gap-4 flex-1 min-w-[280px]">
+                                  {associatedItem?.imageUrl ? (
+                                    <img
+                                      src={associatedItem.imageUrl}
+                                      alt={ticket.itemTitle}
+                                      className="w-16 h-16 rounded-2xl object-cover shrink-0 border border-slate-200 shadow-2xs"
+                                    />
+                                  ) : (
+                                    <div className="w-16 h-16 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
+                                      <Package className="w-7 h-7" />
+                                    </div>
+                                  )}
+
+                                  <div className="space-y-1">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <span className="text-[10px] font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full uppercase">
+                                        {ticket.itemType} Claim
+                                      </span>
+                                      <span className="text-[11px] font-mono text-slate-400">
+                                        Ticket #{ticket.id.slice(-8)}
+                                      </span>
+                                      <span
+                                        className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
+                                          isPending
+                                            ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                            : isCompleted
+                                            ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                                            : 'bg-rose-100 text-rose-900 border border-rose-300'
+                                        }`}
+                                      >
+                                        {ticket.status}
+                                      </span>
+                                    </div>
+
+                                    <h5 className="font-bold text-base text-slate-900">
+                                      {ticket.itemTitle}
+                                    </h5>
+
+                                    <div className="text-xs text-slate-600 flex flex-wrap items-center gap-x-4 gap-y-1">
+                                      <span>
+                                        👤 Claimant: <strong className="text-slate-800">{ticket.claimantName}</strong>
+                                      </span>
+                                      <span>
+                                        🎓 Reg No: <code className="font-mono font-bold text-indigo-700">{ticket.claimantRoll}</code>
+                                      </span>
+                                      <span>
+                                        🏢 Collection Desk: <strong className="text-slate-800">{ticket.helpDeskLocation}</strong>
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Right: Security Handover PIN */}
+                                <div className="text-right shrink-0">
+                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                                    Handover PIN
+                                  </span>
+                                  <span className="text-lg font-black font-mono tracking-widest text-indigo-700">
+                                    {ticket.handoverCode}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Paired Item Linkage Notice */}
+                              {pairedItems.length > 0 && (
+                                <div className="mt-3 bg-indigo-50/80 border border-indigo-200/80 rounded-xl p-3 flex flex-wrap items-center justify-between gap-2">
+                                  <div className="flex items-center gap-2">
+                                    <Link2 className="w-4 h-4 text-indigo-600 shrink-0" />
+                                    <span className="text-xs text-indigo-950">
+                                      <strong>Matched Paired Item:</strong> &quot;{pairedItems[0].title}&quot; ({pairedItems[0].type}) • Reporter: {pairedItems[0].userName} ({pairedItems[0].userRoll}) • Status: <span className="font-bold">{pairedItems[0].status}</span>
+                                    </span>
+                                  </div>
+                                  <span className="text-[10px] font-bold bg-indigo-200/70 text-indigo-900 px-2.5 py-0.5 rounded-full shrink-0">
+                                    Auto-Reconciles on Approval
+                                  </span>
+                                </div>
+                              )}
+
+                              {/* Secret Detail Proof Box */}
+                              <div className="mt-3.5 bg-white border border-slate-200 rounded-xl p-3.5 shadow-2xs">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5 mb-1">
+                                  <Lock className="w-3.5 h-3.5 text-amber-600" />
+                                  Claimant Confidential Proof of Ownership / Identifying Details:
+                                </span>
+                                <p className="text-xs font-semibold text-slate-800 bg-amber-50/60 p-2.5 rounded-lg border border-amber-200/60 italic">
+                                  &quot;{ticket.secretDetailProof}&quot;
+                                </p>
+                                {ticket.officerNotes && (
+                                  <p className="text-[11px] text-slate-500 mt-2">
+                                    📝 <strong>Officer Notes:</strong> {ticket.officerNotes}
+                                  </p>
+                                )}
+                              </div>
+
+                              {/* Admin Action Buttons */}
+                              <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+                                <span className="text-[11px] text-slate-400 font-medium">
+                                  Filed on {new Date(ticket.createdAt).toLocaleDateString()} at {new Date(ticket.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+
+                                <div className="flex flex-wrap items-center gap-2">
+                                  {/* Open Item Details Modal */}
+                                  {associatedItem && (
+                                    <button
+                                      onClick={() => setActiveItemForDetails(associatedItem)}
+                                      className="text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-xl transition-colors"
+                                    >
+                                      View Item
+                                    </button>
+                                  )}
+
+                                  {/* Actions for Pending Verification */}
+                                  {isPending && (
+                                    <>
+                                      <button
+                                        onClick={() => handleRejectClaim(ticket.id)}
+                                        className="text-xs font-bold text-rose-600 hover:text-rose-800 hover:bg-rose-50 px-3 py-1.5 rounded-xl border border-rose-200 transition-colors"
+                                      >
+                                        ✕ Reject Claim
+                                      </button>
+
+                                      <button
+                                        onClick={() => handleAcceptClaim(ticket.id)}
+                                        className="text-xs font-bold bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white px-4 py-2 rounded-xl transition-all shadow-md shadow-emerald-600/20 flex items-center gap-1.5"
+                                      >
+                                        <CheckCircle2 className="w-4 h-4" />
+                                        <span>Accept Collection Request &amp; Release</span>
+                                      </button>
+                                    </>
+                                  )}
+
+                                  {isCompleted && (
+                                    <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-3 py-1.5 rounded-xl flex items-center gap-1">
+                                      <CheckCircle2 className="w-3.5 h-3.5" />
+                                      Claim Accepted &amp; Item Released
+                                    </span>
+                                  )}
+
+                                  {isRejected && (
+                                    <span className="text-xs font-bold text-rose-700 bg-rose-100 px-3 py-1.5 rounded-xl">
+                                      Claim Rejected
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* SECTION 2: PHYSICAL COUNTER QUICK PIN VERIFIER */}
+                <div className="bg-gradient-to-br from-slate-900 to-indigo-950 text-white rounded-3xl p-6 sm:p-7 shadow-xl">
+                  <div className="max-w-xl">
+                    <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-widest block mb-1">
+                      Help Desk Counter Console
+                    </span>
+                    <h4 className="text-lg font-black text-white">Physical Handover PIN Verifier</h4>
+                    <p className="text-xs text-slate-300 mt-1 mb-4 leading-relaxed">
+                      When a student visits the physical collection desk, type their 6-digit Handover PIN or scan their pass QR code to verify and release custody instantly. Matching paired items will automatically synchronize to Returned.
+                    </p>
+
+                    <form onSubmit={handleCounterVerify} className="flex flex-wrap items-center gap-2">
+                      <div className="relative flex-1 min-w-[200px]">
+                        <QrCode className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          value={counterPinInput}
+                          onChange={(e) => setCounterPinInput(e.target.value)}
+                          placeholder="Enter 6-digit PIN (e.g. 746430)"
+                          maxLength={10}
+                          className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white text-xs font-mono font-bold tracking-widest focus:outline-none focus:ring-2 focus:ring-amber-400 placeholder:text-slate-400"
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        className="bg-amber-400 hover:bg-amber-300 active:bg-amber-500 text-slate-950 font-bold text-xs px-5 py-2.5 rounded-xl transition-all shadow-md flex items-center gap-1.5 shrink-0"
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>Verify &amp; Accept Collection</span>
+                      </button>
+                    </form>
+
+                    {counterVerifyMessage && (
+                      <div
+                        className={`mt-3 p-3 rounded-xl text-xs flex items-center gap-2 ${
+                          counterVerifyMessage.type === 'success'
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                            : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                        }`}
+                      >
+                        <AlertCircle className="w-4 h-4 shrink-0" />
+                        <span>{counterVerifyMessage.text}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* SECTION 3: ITEMS CURRENTLY IN HANDOVER CUSTODY */}
+                <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs">
+                  <h4 className="font-bold text-base text-slate-900 mb-4 flex items-center gap-2">
+                    <ShieldCheck className="w-5 h-5 text-indigo-600" />
+                    Items Awaiting Verification at Help Desk Counters
+                  </h4>
+
+                  {items.filter((i) => i.status === 'In Handover').length === 0 ? (
+                    <div className="text-center py-10 text-slate-400">
+                      <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto mb-2" />
+                      <p className="text-xs font-bold text-slate-700">All Handover Tickets Cleared</p>
+                      <p className="text-[11px] text-slate-500">No items currently queued at Help Desk counters.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {items
+                        .filter((i) => i.status === 'In Handover')
+                        .map((item) => (
+                          <div
+                            key={item.id}
+                            className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4"
+                          >
+                            <div className="flex items-center gap-3">
+                              <img
+                                src={item.imageUrl}
+                                alt={item.title}
+                                className="w-14 h-14 rounded-xl object-cover shrink-0 border border-slate-200"
+                              />
+                              <div>
+                                <span className="text-[10px] font-bold text-indigo-600 uppercase">
+                                  {item.category} • {item.location}
+                                </span>
+                                <h5 className="font-bold text-sm text-slate-900">{item.title}</h5>
+                                <p className="text-xs text-slate-500">
+                                  Claimant/Finder: {item.userName} ({item.userRoll})
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                              <div className="text-right">
+                                <span className="text-[10px] text-slate-400 uppercase font-bold block">
+                                  Handover PIN
+                                </span>
+                                <span className="text-base font-black font-mono tracking-widest text-indigo-700">
+                                  {item.handoverCode || '482910'}
+                                </span>
+                              </div>
+
+                              <button
+                                onClick={() => handleOpenHandover(item)}
+                                className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-xs flex items-center gap-1"
+                              >
+                                <QrCode className="w-4 h-4" />
+                                Open Desk Verifier
+                              </button>
+                            </div>
+                          </div>
+                        ))}
                     </div>
                   )}
                 </div>
               </div>
-
-              <div className="bg-white/5 border border-white/10 rounded-2xl p-4 sm:p-5 text-right backdrop-blur-xs min-w-[220px]">
-                <span className="text-[11px] text-slate-400 block font-medium uppercase tracking-wider">
-                  Active Session
-                </span>
-                <span className="text-base font-bold text-white block mt-0.5">
-                  {currentUser ? currentUser.name : 'Guest Visitor'}
-                </span>
-                <span className="text-xs font-mono text-amber-400 block">
-                  {currentUser?.role === 'helpdesk_admin' ? '🛡️ Campus Collection Desk Officer' : currentUser?.rollNumber ? `Reg: ${currentUser.rollNumber}` : 'Unauthenticated'}
-                </span>
-                {currentUser && (
-                  <button
-                    onClick={() => {
-                      signOutPortalUser();
-                      setCurrentUserState(null);
-                      refreshAllData(null);
-                      showToast('Signed out.');
-                    }}
-                    className="text-[11px] font-bold text-slate-400 hover:text-rose-300 underline mt-2 block ml-auto transition-colors"
-                  >
-                    Switch Account
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* SECTION 1: INCOMING COLLECTION REQUESTS & CLAIMS */}
-            <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-5">
-              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-indigo-600" />
-                    <h4 className="font-bold text-lg text-slate-900">
-                      Collection Requests &amp; Student Claims
-                    </h4>
-                  </div>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Students submit claims with secret ownership proof to collect items at designated desks.
-                  </p>
-                </div>
-
-                {/* Filter Pills */}
-                <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
-                  {(['All', 'Pending Verification', 'Completed', 'Rejected'] as const).map((st) => (
-                    <button
-                      key={st}
-                      onClick={() => setClaimStatusFilter(st)}
-                      className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
-                        claimStatusFilter === st
-                          ? 'bg-white text-slate-900 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      {st === 'All' ? 'All Claims' : st}
-                      {st === 'Pending Verification' && (
-                        <span className="ml-1.5 bg-amber-100 text-amber-800 text-[10px] px-1.5 py-0.2 rounded-full font-mono">
-                          {tickets.filter((t) => t.status === 'Pending Verification').length}
-                        </span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Tickets List */}
-              {(() => {
-                const filteredTickets = tickets.filter((t) =>
-                  claimStatusFilter === 'All' ? true : t.status === claimStatusFilter
-                );
-
-                if (filteredTickets.length === 0) {
-                  return (
-                    <div className="text-center py-12 text-slate-400">
-                      <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-2 opacity-80" />
-                      <p className="text-sm font-bold text-slate-700">No collection requests found</p>
-                      <p className="text-xs text-slate-500 mt-1">
-                        {claimStatusFilter === 'All'
-                          ? 'No student claims currently filed for campus collection desks.'
-                          : `No claims matching filter "${claimStatusFilter}".`}
-                      </p>
-                    </div>
-                  );
-                }
-
-                return (
-                  <div className="grid grid-cols-1 gap-4">
-                    {filteredTickets.map((ticket) => {
-                      const associatedItem = items.find((i) => i.id === ticket.itemId);
-                      const isPending = ticket.status === 'Pending Verification';
-                      const isCompleted = ticket.status === 'Completed';
-                      const isRejected = ticket.status === 'Rejected';
-
-                      return (
-                        <div
-                          key={ticket.id}
-                          className={`rounded-2xl border p-5 transition-all ${
-                            isPending
-                              ? 'bg-amber-50/30 border-amber-200 ring-1 ring-amber-300/40'
-                              : isCompleted
-                              ? 'bg-emerald-50/20 border-emerald-200'
-                              : 'bg-slate-50 border-slate-200 opacity-75'
-                          }`}
-                        >
-                          <div className="flex flex-wrap items-start justify-between gap-4">
-                            {/* Left: Item & Claimant info */}
-                            <div className="flex items-start gap-4 flex-1 min-w-[280px]">
-                              {associatedItem?.imageUrl ? (
-                                <img
-                                  src={associatedItem.imageUrl}
-                                  alt={ticket.itemTitle}
-                                  className="w-16 h-16 rounded-2xl object-cover shrink-0 border border-slate-200 shadow-2xs"
-                                />
-                              ) : (
-                                <div className="w-16 h-16 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
-                                  <Package className="w-7 h-7" />
-                                </div>
-                              )}
-
-                              <div className="space-y-1">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <span className="text-[10px] font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full uppercase">
-                                    {ticket.itemType} Claim
-                                  </span>
-                                  <span className="text-[11px] font-mono text-slate-400">
-                                    Ticket #{ticket.id.slice(-8)}
-                                  </span>
-                                  <span
-                                    className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
-                                      isPending
-                                        ? 'bg-amber-100 text-amber-900 border border-amber-300'
-                                        : isCompleted
-                                        ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
-                                        : 'bg-rose-100 text-rose-900 border border-rose-300'
-                                    }`}
-                                  >
-                                    {ticket.status}
-                                  </span>
-                                </div>
-
-                                <h5 className="font-bold text-base text-slate-900">
-                                  {ticket.itemTitle}
-                                </h5>
-
-                                <div className="text-xs text-slate-600 flex flex-wrap items-center gap-x-4 gap-y-1">
-                                  <span>
-                                    👤 Claimant: <strong className="text-slate-800">{ticket.claimantName}</strong>
-                                  </span>
-                                  <span>
-                                    🎓 Reg No: <code className="font-mono font-bold text-indigo-700">{ticket.claimantRoll}</code>
-                                  </span>
-                                  <span>
-                                    🏢 Collection Desk: <strong className="text-slate-800">{ticket.helpDeskLocation}</strong>
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Right: Security Handover PIN */}
-                            <div className="text-right shrink-0">
-                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                                Handover PIN
-                              </span>
-                              <span className="text-lg font-black font-mono tracking-widest text-indigo-700">
-                                {ticket.handoverCode}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Secret Detail Proof Box */}
-                          <div className="mt-4 bg-white border border-slate-200 rounded-xl p-3.5 shadow-2xs">
-                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5 mb-1">
-                              <Lock className="w-3.5 h-3.5 text-amber-600" />
-                              Claimant Confidential Proof of Ownership / Identifying Details:
-                            </span>
-                            <p className="text-xs font-semibold text-slate-800 bg-amber-50/60 p-2.5 rounded-lg border border-amber-200/60 italic">
-                              "{ticket.secretDetailProof}"
-                            </p>
-                            {ticket.officerNotes && (
-                              <p className="text-[11px] text-slate-500 mt-2">
-                                📝 <strong>Officer Notes:</strong> {ticket.officerNotes}
-                              </p>
-                            )}
-                          </div>
-
-                          {/* Admin Action Buttons */}
-                          <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
-                            <span className="text-[11px] text-slate-400 font-medium">
-                              Filed on {new Date(ticket.createdAt).toLocaleDateString()} at {new Date(ticket.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </span>
-
-                            <div className="flex flex-wrap items-center gap-2">
-                              {/* Open Item Details Modal */}
-                              {associatedItem && (
-                                <button
-                                  onClick={() => setActiveItemForDetails(associatedItem)}
-                                  className="text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-xl transition-colors"
-                                >
-                                  View Item
-                                </button>
-                              )}
-
-                              {/* Actions for Pending Verification */}
-                              {isPending && (
-                                <>
-                                  <button
-                                    onClick={() => handleRejectClaim(ticket.id)}
-                                    className="text-xs font-bold text-rose-600 hover:text-rose-800 hover:bg-rose-50 px-3 py-1.5 rounded-xl border border-rose-200 transition-colors"
-                                  >
-                                    ✕ Reject Claim
-                                  </button>
-
-                                  <button
-                                    onClick={() => handleAcceptClaim(ticket.id)}
-                                    className="text-xs font-bold bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white px-4 py-2 rounded-xl transition-all shadow-md shadow-emerald-600/20 flex items-center gap-1.5"
-                                  >
-                                    <CheckCircle2 className="w-4 h-4" />
-                                    <span>Accept Collection Request &amp; Release</span>
-                                  </button>
-                                </>
-                              )}
-
-                              {isCompleted && (
-                                <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-3 py-1.5 rounded-xl flex items-center gap-1">
-                                  <CheckCircle2 className="w-3.5 h-3.5" />
-                                  Claim Accepted &amp; Item Released
-                                </span>
-                              )}
-
-                              {isRejected && (
-                                <span className="text-xs font-bold text-rose-700 bg-rose-100 px-3 py-1.5 rounded-xl">
-                                  Claim Rejected
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
-            </div>
-
-            {/* SECTION 2: PHYSICAL COUNTER QUICK PIN VERIFIER */}
-            <div className="bg-gradient-to-br from-slate-900 to-indigo-950 text-white rounded-3xl p-6 sm:p-7 shadow-xl">
-              <div className="max-w-xl">
-                <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-widest block mb-1">
-                  Help Desk Counter Console
-                </span>
-                <h4 className="text-lg font-black text-white">Physical Handover PIN Verifier</h4>
-                <p className="text-xs text-slate-300 mt-1 mb-4 leading-relaxed">
-                  When a student visits the physical collection desk, type their 6-digit Handover PIN or scan their pass QR code to verify and release custody instantly.
-                </p>
-
-                <form onSubmit={handleCounterVerify} className="flex flex-wrap items-center gap-2">
-                  <div className="relative flex-1 min-w-[200px]">
-                    <QrCode className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      value={counterPinInput}
-                      onChange={(e) => setCounterPinInput(e.target.value)}
-                      placeholder="Enter 6-digit PIN (e.g. 746430)"
-                      maxLength={10}
-                      className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white text-xs font-mono font-bold tracking-widest focus:outline-none focus:ring-2 focus:ring-amber-400 placeholder:text-slate-400"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="bg-amber-400 hover:bg-amber-300 active:bg-amber-500 text-slate-950 font-bold text-xs px-5 py-2.5 rounded-xl transition-all shadow-md flex items-center gap-1.5 shrink-0"
-                  >
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>Verify &amp; Accept Collection</span>
-                  </button>
-                </form>
-
-                {counterVerifyMessage && (
-                  <div
-                    className={`mt-3 p-3 rounded-xl text-xs flex items-center gap-2 ${
-                      counterVerifyMessage.type === 'success'
-                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                        : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                    }`}
-                  >
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                    <span>{counterVerifyMessage.text}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* SECTION 3: ITEMS CURRENTLY IN HANDOVER CUSTODY */}
-            <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs">
-              <h4 className="font-bold text-base text-slate-900 mb-4 flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5 text-indigo-600" />
-                Items Awaiting Verification at Help Desk Counters
-              </h4>
-
-              {items.filter((i) => i.status === 'In Handover').length === 0 ? (
-                <div className="text-center py-10 text-slate-400">
-                  <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto mb-2" />
-                  <p className="text-xs font-bold text-slate-700">All Handover Tickets Cleared</p>
-                  <p className="text-[11px] text-slate-500">No items currently queued at Help Desk counters.</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {items
-                    .filter((i) => i.status === 'In Handover')
-                    .map((item) => (
-                      <div
-                        key={item.id}
-                        className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4"
-                      >
-                        <div className="flex items-center gap-3">
-                          <img
-                            src={item.imageUrl}
-                            alt={item.title}
-                            className="w-14 h-14 rounded-xl object-cover shrink-0 border border-slate-200"
-                          />
-                          <div>
-                            <span className="text-[10px] font-bold text-indigo-600 uppercase">
-                              {item.category} • {item.location}
-                            </span>
-                            <h5 className="font-bold text-sm text-slate-900">{item.title}</h5>
-                            <p className="text-xs text-slate-500">
-                              Claimant/Finder: {item.userName} ({item.userRoll})
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-3">
-                          <div className="text-right">
-                            <span className="text-[10px] text-slate-400 uppercase font-bold block">
-                              Handover PIN
-                            </span>
-                            {currentUser && (currentUser.role === 'helpdesk_admin' || isItemOwnedByUser(item, currentUser)) ? (
-                              <span className="text-base font-black font-mono tracking-widest text-indigo-700">
-                                {item.handoverCode || '482910'}
-                              </span>
-                            ) : (
-                              <span className="text-base font-black font-mono tracking-widest text-slate-400">
-                                ••••••
-                              </span>
-                            )}
-                          </div>
-
-                          <button
-                            onClick={() => handleOpenHandover(item)}
-                            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-xs flex items-center gap-1"
-                          >
-                            <QrCode className="w-4 h-4" />
-                            {currentUser?.role === 'helpdesk_admin'
-                              ? 'Open Desk Verifier'
-                              : currentUser?.id === item.userId
-                              ? 'View My Pass'
-                              : 'Claim Item'}
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              )}
-            </div>
+            )}
 
             {/* Live Data Reload */}
             <div className="text-center pt-6">

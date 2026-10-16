@@ -298,3 +298,56 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+// PATCH /api/items - Update lifecycle status of an item and optional paired item
+export async function PATCH(req: NextRequest) {
+  let body: any;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ success: false, error: 'Malformed JSON payload' }, { status: 400 });
+  }
+
+  try {
+    const { id, status, historyLog, syncPairId } = body || {};
+    if (!id || !status) {
+      return NextResponse.json({ success: false, error: 'id and status are required' }, { status: 400 });
+    }
+
+    const supabase = getSupabase();
+    const now = new Date().toISOString();
+
+    const updatePayload: any = {
+      status,
+      updated_at: now,
+    };
+    if (historyLog && Array.isArray(historyLog)) {
+      updatePayload.history_log = historyLog;
+    }
+
+    const { error: updateError } = await supabase
+      .from('portal_items')
+      .update(updatePayload)
+      .eq('id', id);
+
+    if (updateError) {
+      console.error('Supabase portal_items update error:', updateError);
+    }
+
+    if (syncPairId) {
+      await supabase
+        .from('portal_items')
+        .update({ status, updated_at: now })
+        .eq('id', syncPairId);
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: `Item ${id} status updated to ${status}`,
+    });
+  } catch (err: any) {
+    console.error('PATCH /api/items error:', err);
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  }
+}
+
