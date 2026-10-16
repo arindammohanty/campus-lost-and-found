@@ -18,6 +18,7 @@ import {
   CheckCircle2,
   X,
   LogOut,
+  Archive,
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -225,6 +226,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             { id: 'map', label: 'Campus Map View', icon: MapPin },
             { id: 'matches', label: 'AI Match Radar', icon: Sparkles },
             { id: 'my-items', label: 'My Items & Activity', icon: Layers },
+            { id: 'archive', label: 'Archive (60+ Days)', icon: Archive },
             { id: 'helpdesk', label: 'Campus Help Desk Handover', icon: ShieldCheck },
           ].map((tab) => {
             const Icon = tab.icon;

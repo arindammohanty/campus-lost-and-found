@@ -363,6 +363,39 @@ export function isItemOwnedByUser(
   return false;
 }
 
+/**
+ * Calculates item age in days based on report date or creation timestamp.
+ */
+export function getItemAgeInDays(item: Item | null | undefined): number {
+  if (!item) return 0;
+  const dateStr = item.date || item.createdAt;
+  if (!dateStr) return 0;
+  const parsed = new Date(dateStr).getTime();
+  if (isNaN(parsed)) return 0;
+  const diffMs = Date.now() - parsed;
+  return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+}
+
+/**
+ * Determines whether an item transitions automatically to the Archive section:
+ * 1. Explicitly marked as 'Archived'
+ * 2. Returned / Reunited items (lifecycle completed)
+ * 3. Lost items older than 60 days (60-day auto-archive policy)
+ * 4. Found items older than 60 days or marked Returned/Archived
+ */
+export function isItemArchived(item: Item | null | undefined): boolean {
+  if (!item) return false;
+  if (item.status === 'Archived') return true;
+  if (item.status === 'Returned') return true;
+
+  const ageDays = getItemAgeInDays(item);
+  if (ageDays >= 60) {
+    return true;
+  }
+
+  return false;
+}
+
 export function registerPortalUser(userData: Omit<User, 'id'> & { id?: string }): User {
   const users = getPortalUsers();
   const normalizedRoll = userData.rollNumber?.trim().toLowerCase();

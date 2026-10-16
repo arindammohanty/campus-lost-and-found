@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ItemType, CategoryType, ContactPreference, User } from '../types/portal';
+import { Item, ItemType, CategoryType, ContactPreference, User } from '../types/portal';
 import { CATEGORIES, CAMPUS_LOCATIONS } from '../data/campusData';
 import { CampusMap } from './CampusMap';
 import { extractAIFeatures } from '../utils/aiEngine';
@@ -21,19 +21,23 @@ import {
   Smartphone,
   Tag,
   Wand2,
+  CheckCircle2,
+  Archive,
 } from 'lucide-react';
 
 interface ReportModalProps {
   initialType?: ItemType;
+  initialItemData?: Partial<Item>;
+  matchedArchivedItem?: Item | null;
   currentUser: User;
   onClose: () => void;
   onSubmit: (itemData: any) => void;
 }
 
-
-
 export const ReportModal: React.FC<ReportModalProps> = ({
   initialType = 'Lost',
+  initialItemData,
+  matchedArchivedItem,
   currentUser,
   onClose,
   onSubmit,
@@ -42,17 +46,17 @@ export const ReportModal: React.FC<ReportModalProps> = ({
   const [step, setStep] = useState<1 | 2>(1); // Step 1: Info & Map, Step 2: Photo & Contact
 
   // Form Fields
-  const [title, setTitle] = useState('');
-  const [category, setCategory] = useState<CategoryType>('Electronics');
-  const [color, setColor] = useState('');
-  const [brand, setBrand] = useState('');
-  const [description, setDescription] = useState('');
-  const [location, setLocation] = useState(CAMPUS_LOCATIONS[1].name); // Default Central Library
-  const [locationDetails, setLocationDetails] = useState('');
+  const [title, setTitle] = useState(initialItemData?.title || '');
+  const [category, setCategory] = useState<CategoryType>(initialItemData?.category || 'Electronics');
+  const [color, setColor] = useState(initialItemData?.color || '');
+  const [brand, setBrand] = useState(initialItemData?.brand || '');
+  const [description, setDescription] = useState(initialItemData?.description || '');
+  const [location, setLocation] = useState(initialItemData?.location || CAMPUS_LOCATIONS[1].name); // Default Central Library
+  const [locationDetails, setLocationDetails] = useState(initialItemData?.locationDetails || '');
   const [mapPin, setMapPin] = useState<{ x: number; y: number; locationName: string }>({
-    x: CAMPUS_LOCATIONS[1].mapX,
-    y: CAMPUS_LOCATIONS[1].mapY,
-    locationName: CAMPUS_LOCATIONS[1].name,
+    x: initialItemData?.mapX !== undefined ? initialItemData.mapX : CAMPUS_LOCATIONS[1].mapX,
+    y: initialItemData?.mapY !== undefined ? initialItemData.mapY : CAMPUS_LOCATIONS[1].mapY,
+    locationName: initialItemData?.location || CAMPUS_LOCATIONS[1].name,
   });
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [time, setTime] = useState('02:00 PM');
@@ -237,6 +241,21 @@ export const ReportModal: React.FC<ReportModalProps> = ({
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-2xl text-xs flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{error}</span>
+            </div>
+          )}
+
+          {matchedArchivedItem && (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-xs text-emerald-950 flex items-start gap-3 shadow-xs animate-fadeIn">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold text-emerald-900 block text-xs">
+                  Reporting Found Match for Archived Lost Report #{matchedArchivedItem.id}
+                </span>
+                <p className="text-[11px] text-emerald-800 mt-0.5 leading-relaxed">
+                  Original listing: &quot;<strong>{matchedArchivedItem.title}</strong>&quot; reported lost on {matchedArchivedItem.date} by {matchedArchivedItem.userName}.
+                  Submitting will automatically pair these items, trigger the AI verification flow, and notify the original owner!
+                </p>
+              </div>
             </div>
           )}
 

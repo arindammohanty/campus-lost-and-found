@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Item, User, ItemLifecycleStatus } from '../types/portal';
-import { isItemOwnedByUser } from '../utils/portalStorage';
+import { isItemOwnedByUser, isItemArchived, getItemAgeInDays } from '../utils/portalStorage';
 import {
   X,
   MapPin,
@@ -20,6 +20,7 @@ import {
   ChevronRight,
   ArrowRight,
   UserCheck,
+  Archive,
 } from 'lucide-react';
 
 interface ItemDetailsModalProps {
@@ -30,6 +31,7 @@ interface ItemDetailsModalProps {
   onOpenHandover: (item: Item) => void;
   onOpenMatchRadar: (item: Item) => void;
   onStatusChange?: (itemId: string, status: ItemLifecycleStatus) => void;
+  onReportFound?: (item: Item) => void;
 }
 
 const LIFECYCLE_STEPS: { status: ItemLifecycleStatus; label: string; sub: string }[] = [
@@ -39,6 +41,7 @@ const LIFECYCLE_STEPS: { status: ItemLifecycleStatus; label: string; sub: string
   { status: 'Match Found', label: 'Match Found', sub: 'Auto-paired by AI' },
   { status: 'In Handover', label: 'In Handover', sub: 'At Campus Help Desk' },
   { status: 'Returned', label: 'Returned', sub: 'Verified & closed' },
+  { status: 'Archived', label: 'Archived', sub: 'Historical records' },
 ];
 
 export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({
@@ -49,10 +52,13 @@ export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({
   onOpenHandover,
   onOpenMatchRadar,
   onStatusChange,
+  onReportFound,
 }) => {
   const isOwner = isItemOwnedByUser(item, currentUser);
   const isHelpDesk = currentUser ? currentUser.role === 'helpdesk_admin' : false;
   const isLost = item.type === 'Lost';
+  const isArchived = isItemArchived(item);
+  const ageDays = getItemAgeInDays(item);
 
   // Get current step index in lifecycle
   const currentStepIndex = LIFECYCLE_STEPS.findIndex((s) => s.status === item.status);
@@ -89,6 +95,28 @@ export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({
 
         {/* Scrollable Content */}
         <div className="p-6 overflow-y-auto space-y-6 flex-1">
+          {/* Archive Status Notification Banner */}
+          {isArchived && (
+            <div className="bg-amber-50 border border-amber-300/80 rounded-2xl p-4 flex items-start gap-3 shadow-xs">
+              <Archive className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-amber-950 text-xs flex items-center gap-1.5">
+                    Campus Archive Section • Reported {ageDays} days ago
+                  </span>
+                  <span className="text-[10px] bg-amber-200/90 text-amber-900 font-bold px-2 py-0.5 rounded-md font-mono">
+                    {item.status === 'Returned' ? 'Resolved / Reunited' : '60+ Days Retention'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-amber-900 mt-1 leading-relaxed">
+                  {isLost
+                    ? 'This lost item listing has reached the 60-day auto-archive threshold. If you have recently discovered or recovered this item, please click "I Found This Item" below to alert the student!'
+                    : 'This found item report has transitioned into the campus historical archive.'}
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Visual Lifecycle Stepper (Direct from CM 2.png) */}
           <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
             <div className="flex items-center justify-between mb-3">
@@ -252,7 +280,7 @@ export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({
                 🛠️ Help Desk Officer Controls (Direct Status Override)
               </span>
               <div className="flex flex-wrap gap-2">
-                {(['Reported', 'Under Review', 'Active', 'Match Found', 'In Handover', 'Returned'] as ItemLifecycleStatus[]).map(
+                {(['Reported', 'Under Review', 'Active', 'Match Found', 'In Handover', 'Returned', 'Archived'] as ItemLifecycleStatus[]).map(
                   (st) => (
                     <button
                       key={st}
@@ -311,6 +339,19 @@ export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({
           </button>
 
           <div className="flex items-center gap-2">
+            {isLost && onReportFound && (
+              <button
+                onClick={() => {
+                  onClose();
+                  onReportFound(item);
+                }}
+                className="flex items-center gap-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl transition-all shadow-md"
+              >
+                <Sparkles className="w-4 h-4" />
+                I Found This Item
+              </button>
+            )}
+
             <button
               onClick={() => onOpenChat(item)}
               className="flex items-center gap-1.5 text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-xl transition-all shadow-md"

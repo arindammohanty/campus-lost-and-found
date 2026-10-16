@@ -23,6 +23,9 @@ import {
   getHandoverTickets,
   syncPortalItemsWithServer,
   isItemOwnedByUser,
+  isItemArchived,
+  getItemAgeInDays,
+  createNotification,
 } from '../utils/portalStorage';
 import { CATEGORIES, CAMPUS_LOCATIONS } from '../data/campusData';
 
@@ -60,6 +63,7 @@ import {
   AlertTriangle,
   PackageSearch,
   UserCheck,
+  Archive,
 } from 'lucide-react';
 
 export default function Home() {
@@ -69,7 +73,7 @@ export default function Home() {
   const [currentUser, setCurrentUserState] = useState<User | null>(null);
   const [items, setItems] = useState<Item[]>([]);
   const [notifications, setNotifications] = useState<PlatformNotification[]>([]);
-  const [activeTab, setActiveTab] = useState<'explore' | 'map' | 'matches' | 'my-items' | 'helpdesk'>('explore');
+  const [activeTab, setActiveTab] = useState<'explore' | 'map' | 'matches' | 'my-items' | 'helpdesk' | 'archive'>('explore');
 
   // 2. Search & Filtering State
   const [searchQuery, setSearchQuery] = useState('');
@@ -81,6 +85,9 @@ export default function Home() {
 
   // 3. Modals State
   const [reportModalType, setReportModalType] = useState<ItemType | null>(null);
+  const [reportModalInitialData, setReportModalInitialData] = useState<Partial<Item> | undefined>(undefined);
+  const [matchedArchivedItem, setMatchedArchivedItem] = useState<Item | null>(null);
+  const [archiveTypeFilter, setArchiveTypeFilter] = useState<'All' | 'Lost' | 'Found'>('All');
   const [activeItemForDetails, setActiveItemForDetails] = useState<Item | null>(null);
   const [activeItemForChat, setActiveItemForChat] = useState<Item | null>(null);
   const [activeItemForHandover, setActiveItemForHandover] = useState<Item | null>(null);
@@ -154,7 +161,29 @@ export default function Home() {
       setShowAuthModal(true);
       return;
     }
+    setReportModalInitialData(undefined);
+    setMatchedArchivedItem(null);
     setReportModalType(type);
+  };
+
+  const handleReportFoundForArchivedItem = (archivedItem: Item) => {
+    if (!currentUser) {
+      showToast('Please sign in or register with your University Registration Number to report finding this item.');
+      setAuthModalTab('signin');
+      setShowAuthModal(true);
+      return;
+    }
+    setMatchedArchivedItem(archivedItem);
+    setReportModalInitialData({
+      title: archivedItem.title.toLowerCase().startsWith('found') ? archivedItem.title : `Found: ${archivedItem.title}`,
+      category: archivedItem.category,
+      color: archivedItem.color,
+      brand: archivedItem.brand,
+      location: archivedItem.location,
+      locationDetails: archivedItem.locationDetails,
+      description: `Discovered item matching archived lost report #${archivedItem.id} ("${archivedItem.title}").`,
+    });
+    setReportModalType('Found');
   };
 
   const handleOpenChat = (item: Item) => {
@@ -181,6 +210,26 @@ export default function Home() {
   const handleReportSubmit = (formData: any) => {
     if (!currentUser) return;
     const result = savePortalItem(formData, currentUser);
+
+    // If this found report was submitted for an archived lost item, pair them immediately!
+    if (matchedArchivedItem) {
+      updatePortalItemStatus(
+        matchedArchivedItem.id,
+        'Match Found',
+        `Found report submitted by ${currentUser.name} (${currentUser.rollNumber})`,
+        currentUser.name
+      );
+      createNotification({
+        userId: matchedArchivedItem.userId,
+        title: `Match Reported for Archived Listing!`,
+        message: `${currentUser.name} reported finding an item matching your archived lost report "${matchedArchivedItem.title}". Check In-App Chat or AI Match Radar!`,
+        type: 'match',
+        itemId: matchedArchivedItem.id,
+      });
+      setMatchedArchivedItem(null);
+      setReportModalInitialData(undefined);
+    }
+
     setReportModalType(null);
     refreshAllData();
 
@@ -240,8 +289,17 @@ export default function Home() {
     // Location Filter
     if (selectedLocation !== 'All' && item.location !== selectedLocation) return false;
 
-    // Status Filter
-    if (selectedStatus !== 'All' && item.status !== selectedStatus) return false;
+    // Status & Archival Segregation
+    if (selectedStatus === 'Archived') {
+      if (!isItemArchived(item)) return false;
+    } else if (selectedStatus !== 'All') {
+      if (item.status !== selectedStatus) return false;
+    } else {
+      // By default in 'explore' view: active radar listings only
+      // Found items that completed lifecycle (Returned) or lost/found items older than 60 days
+      // automatically transition to the Archive Section
+      if (isItemArchived(item)) return false;
+    }
 
     // Search Query Filter
     if (searchQuery.trim()) {
@@ -262,10 +320,31 @@ export default function Home() {
   });
 
   // Calculate live statistics
-  const totalLost = uniqueItems.filter((i) => i.type === 'Lost').length;
-  const totalFound = uniqueItems.filter((i) => i.type === 'Found').length;
+  const totalLost = uniqueItems.filter((i) => i.type === 'Lost' && !isItemArchived(i)).length;
+  const totalFound = uniqueItems.filter((i) => i.type === 'Found' && !isItemArchived(i)).length;
   const totalReturned = uniqueItems.filter((i) => i.status === 'Returned').length;
   const totalInHandover = uniqueItems.filter((i) => i.status === 'In Handover').length;
+  const totalArchived = uniqueItems.filter(isItemArchived).length;
+
+  // Filtered archived listings for Archive Section
+  const archivedListings = uniqueItems.filter((item) => {
+    if (!isItemArchived(item)) return false;
+    if (archiveTypeFilter !== 'All' && item.type !== archiveTypeFilter) return false;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matchTitle = item.title.toLowerCase().includes(q);
+      const matchDesc = item.description.toLowerCase().includes(q);
+      const matchCat = item.category.toLowerCase().includes(q);
+      const matchLoc = item.location.toLowerCase().includes(q);
+      const matchBrand = (item.brand || '').toLowerCase().includes(q);
+      const matchColor = (item.color || '').toLowerCase().includes(q);
+      const matchTags = (item.aiTags || []).some((t) => t.toLowerCase().includes(q));
+      if (!matchTitle && !matchDesc && !matchCat && !matchLoc && !matchBrand && !matchColor && !matchTags) {
+        return false;
+      }
+    }
+    return true;
+  });
 
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
@@ -348,7 +427,7 @@ export default function Home() {
           </div>
 
           {/* Quick Metrics Bar */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-8 pt-6 border-t border-white/10">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-8 pt-6 border-t border-white/10">
             <button
               onClick={() => {
                 setSelectedType('Lost');
@@ -397,12 +476,44 @@ export default function Home() {
               <span className="text-[11px] text-slate-400 font-semibold uppercase block">Returned &amp; Closed</span>
               <span className="text-2xl font-black text-white">{totalReturned}</span>
             </button>
+            <button
+              onClick={() => {
+                setActiveTab('archive');
+              }}
+              className={`text-left bg-white/5 hover:bg-white/10 p-3 rounded-2xl border transition-all cursor-pointer ${
+                activeTab === 'archive' ? 'border-amber-400 bg-white/10 ring-1 ring-amber-400/50' : 'border-white/10'
+              }`}
+            >
+              <span className="text-[11px] text-slate-400 font-semibold uppercase block flex items-center gap-1">
+                <Archive className="w-3 h-3 text-amber-400" /> Archive (60d+)
+              </span>
+              <span className="text-2xl font-black text-amber-300">{totalArchived}</span>
+            </button>
           </div>
         </section>
 
         {/* TAB 1: Explore & Search View */}
         {activeTab === 'explore' && (
           <div className="space-y-6">
+            {/* Archive Notification Callout Banner */}
+            {totalArchived > 0 && selectedStatus !== 'Archived' && (
+              <div className="bg-amber-50/90 border border-amber-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 text-xs shadow-xs">
+                <div className="flex items-center gap-2.5 text-amber-950">
+                  <Archive className="w-4 h-4 text-amber-700 shrink-0" />
+                  <span>
+                    Showing active campus radar. <strong>{totalArchived} listing(s)</strong> older than 60 days or completed have automatically transitioned to the Archive Section.
+                  </span>
+                </div>
+                <button
+                  onClick={() => setActiveTab('archive')}
+                  className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-3.5 py-1.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5 text-[11px]"
+                >
+                  <span>Explore Archive (60+ Days)</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
             {/* Filter Pills & View Toggles */}
             <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-xs space-y-4">
               {/* Mobile Search Input (< md) */}
@@ -520,13 +631,14 @@ export default function Home() {
                     onChange={(e) => setSelectedStatus(e.target.value as any)}
                     className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-600"
                   >
-                    <option value="All">All Lifecycle Statuses</option>
+                    <option value="All">All Active Statuses</option>
                     <option value="Reported">Reported</option>
                     <option value="Under Review">Under Review (AI Processing)</option>
                     <option value="Active">Active (On Radar)</option>
                     <option value="Match Found">Match Found</option>
                     <option value="In Handover">In Handover (At Help Desk)</option>
                     <option value="Returned">Returned (Closed)</option>
+                    <option value="Archived">Archived (60+ Days / Resolved)</option>
                   </select>
                 </div>
               </div>
@@ -581,8 +693,9 @@ export default function Home() {
                         item={item}
                         currentUser={currentUser}
                         onOpenDetails={(i) => setActiveItemForDetails(i)}
-                        onOpenChat={(i) => setActiveItemForChat(i)}
-                        onOpenHandover={(i) => setActiveItemForHandover(i)}
+                        onOpenChat={(i) => handleOpenChat(i)}
+                        onOpenHandover={(i) => handleOpenHandover(i)}
+                        onReportFound={(i) => handleReportFoundForArchivedItem(i)}
                       />
                     ))}
                   </div>
@@ -782,6 +895,7 @@ export default function Home() {
                             onOpenDetails={(i) => setActiveItemForDetails(i)}
                             onOpenChat={(i) => handleOpenChat(i)}
                             onOpenHandover={(i) => handleOpenHandover(i)}
+                            onReportFound={(i) => handleReportFoundForArchivedItem(i)}
                           />
                         ))}
                       </div>
@@ -821,6 +935,7 @@ export default function Home() {
                             onOpenDetails={(i) => setActiveItemForDetails(i)}
                             onOpenChat={(i) => handleOpenChat(i)}
                             onOpenHandover={(i) => handleOpenHandover(i)}
+                            onReportFound={(i) => handleReportFoundForArchivedItem(i)}
                           />
                         ))}
                       </div>
@@ -946,14 +1061,171 @@ export default function Home() {
             </div>
           </div>
         )}
+
+        {/* TAB 6: Campus Archive Section (60+ Days & Resolved Listings) */}
+        {activeTab === 'archive' && (
+          <div className="space-y-6">
+            {/* Archive Header Banner */}
+            <div className="bg-gradient-to-r from-amber-950 via-slate-900 to-amber-900 rounded-3xl p-6 text-white shadow-xl flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <span className="bg-amber-500/20 text-amber-300 font-bold text-[10px] uppercase tracking-wider px-2.5 py-0.5 rounded-full border border-amber-500/30 flex items-center gap-1 w-fit mb-2">
+                  <Archive className="w-3.5 h-3.5 text-amber-400" />
+                  Campus Historical Archive
+                </span>
+                <h3 className="font-black text-2xl text-white">Archived Lost &amp; Found Listings</h3>
+                <p className="text-xs text-slate-300 max-w-xl mt-1 leading-relaxed">
+                  Listings older than 60 days and resolved/returned items automatically transition here to keep the active campus radar focused.
+                  All archived records remain permanently accessible. If you discover an archived lost item on campus, click <strong>&quot;Report Found&quot;</strong> to notify the student!
+                </p>
+              </div>
+
+              <div className="text-right">
+                <span className="text-xs text-slate-400 block font-medium">
+                  Retention Policy:
+                </span>
+                <span className="text-sm font-bold text-amber-400 font-mono">
+                  60-Day Auto Archive
+                </span>
+              </div>
+            </div>
+
+            {/* Metric Summary Bar */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                  Total in Archive
+                </span>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-black text-slate-900">
+                    {uniqueItems.filter(isItemArchived).length}
+                  </span>
+                  <span className="text-[11px] text-slate-500 font-medium">Listings</span>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-amber-600 block mb-1 flex items-center gap-1">
+                  <PackageSearch className="w-3.5 h-3.5" />
+                  Archived Lost
+                </span>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-black text-amber-700">
+                    {uniqueItems.filter((i) => isItemArchived(i) && i.type === 'Lost').length}
+                  </span>
+                  <span className="text-[11px] text-slate-500 font-medium">(60+ Days)</span>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 block mb-1 flex items-center gap-1">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  Archived Found
+                </span>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-black text-emerald-700">
+                    {uniqueItems.filter((i) => isItemArchived(i) && i.type === 'Found').length}
+                  </span>
+                  <span className="text-[11px] text-slate-500 font-medium">Records</span>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-600 block mb-1 flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Reunited / Closed
+                </span>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-black text-indigo-700">
+                    {uniqueItems.filter((i) => i.status === 'Returned').length}
+                  </span>
+                  <span className="text-[11px] text-slate-500 font-medium">Completed</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Archive Type Filter Pills */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setArchiveTypeFilter('All')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    archiveTypeFilter === 'All'
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  All Archive ({uniqueItems.filter(isItemArchived).length})
+                </button>
+                <button
+                  onClick={() => setArchiveTypeFilter('Lost')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    archiveTypeFilter === 'Lost'
+                      ? 'bg-amber-500 text-slate-950 shadow-xs'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Lost (60+ Days) ({uniqueItems.filter((i) => isItemArchived(i) && i.type === 'Lost').length})
+                </button>
+                <button
+                  onClick={() => setArchiveTypeFilter('Found')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    archiveTypeFilter === 'Found'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Found / Resolved ({uniqueItems.filter((i) => isItemArchived(i) && i.type === 'Found').length})
+                </button>
+              </div>
+
+              <div className="text-xs text-slate-500 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Found an item listed here? Click <strong>Report Found</strong> on the card to notify the owner.</span>
+              </div>
+            </div>
+
+            {/* Archive Listings Grid */}
+            {archivedListings.length === 0 ? (
+              <div className="bg-white rounded-3xl border border-dashed border-slate-200 p-12 text-center max-w-md mx-auto">
+                <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto mb-3">
+                  <Archive className="w-7 h-7" />
+                </div>
+                <h4 className="font-bold text-base text-slate-900 mb-1">No Items in This Archive View</h4>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  No listings match the selected archive filter. You can switch between All, Lost (60+ Days), or Found items.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {archivedListings.map((item) => (
+                  <ItemCard
+                    key={item.id}
+                    item={item}
+                    currentUser={currentUser}
+                    onOpenDetails={(i) => setActiveItemForDetails(i)}
+                    onOpenChat={(i) => handleOpenChat(i)}
+                    onOpenHandover={(i) => handleOpenHandover(i)}
+                    onReportFound={(i) => handleReportFoundForArchivedItem(i)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </main>
 
       {/* MODAL 1: Report Lost / Found Item Wizard */}
       {reportModalType && currentUser && (
         <ReportModal
           initialType={reportModalType}
+          initialItemData={reportModalInitialData}
+          matchedArchivedItem={matchedArchivedItem}
           currentUser={currentUser}
-          onClose={() => setReportModalType(null)}
+          onClose={() => {
+            setReportModalType(null);
+            setReportModalInitialData(undefined);
+            setMatchedArchivedItem(null);
+          }}
           onSubmit={handleReportSubmit}
         />
       )}
@@ -978,6 +1250,10 @@ export default function Home() {
             setActiveTab('matches');
           }}
           onStatusChange={handleItemStatusChange}
+          onReportFound={(i) => {
+            setActiveItemForDetails(null);
+            handleReportFoundForArchivedItem(i);
+          }}
         />
       )}
 

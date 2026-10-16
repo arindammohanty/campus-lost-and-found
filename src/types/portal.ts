@@ -6,7 +6,8 @@ export type ItemLifecycleStatus =
   | 'Active'
   | 'Match Found'
   | 'In Handover'
-  | 'Returned';
+  | 'Returned'
+  | 'Archived';
 
 export type CategoryType = 
   | 'Electronics' 

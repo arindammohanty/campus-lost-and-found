@@ -2,8 +2,8 @@
 
 import React from 'react';
 import { Item, User } from '../types/portal';
-import { isItemOwnedByUser } from '../utils/portalStorage';
-import { MapPin, Calendar, Clock, Sparkles, MessageSquare, ShieldCheck, Tag, UserCheck } from 'lucide-react';
+import { isItemOwnedByUser, isItemArchived, getItemAgeInDays } from '../utils/portalStorage';
+import { MapPin, Calendar, Clock, Sparkles, MessageSquare, ShieldCheck, Tag, UserCheck, Archive } from 'lucide-react';
 
 interface ItemCardProps {
   item: Item;
@@ -11,6 +11,7 @@ interface ItemCardProps {
   onOpenDetails: (item: Item) => void;
   onOpenChat: (item: Item) => void;
   onOpenHandover: (item: Item) => void;
+  onReportFound?: (item: Item) => void;
 }
 
 export const ItemCard: React.FC<ItemCardProps> = ({
@@ -19,11 +20,17 @@ export const ItemCard: React.FC<ItemCardProps> = ({
   onOpenDetails,
   onOpenChat,
   onOpenHandover,
+  onReportFound,
 }) => {
   const isLost = item.type === 'Lost';
   const isOwner = isItemOwnedByUser(item, currentUser);
+  const isArchived = isItemArchived(item);
+  const ageDays = getItemAgeInDays(item);
 
   const getStatusBadge = () => {
+    if (isArchived) {
+      return 'bg-amber-100 text-amber-900 border-amber-300';
+    }
     switch (item.status) {
       case 'Returned':
         return 'bg-emerald-100 text-emerald-800 border-emerald-200';
@@ -71,12 +78,19 @@ export const ItemCard: React.FC<ItemCardProps> = ({
         </div>
 
         {/* Lifecycle Status Pill (Top Right) */}
-        <div className="absolute top-3 right-3">
-          <span
-            className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-xl shadow-md border backdrop-blur-md ${getStatusBadge()}`}
-          >
-            {item.status}
-          </span>
+        <div className="absolute top-3 right-3 flex items-center gap-1">
+          {isArchived ? (
+            <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-xl shadow-md border backdrop-blur-md bg-amber-500/90 text-slate-950 border-amber-400 flex items-center gap-1 font-mono">
+              <Archive className="w-3 h-3" />
+              Archived ({ageDays}d)
+            </span>
+          ) : (
+            <span
+              className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-xl shadow-md border backdrop-blur-md ${getStatusBadge()}`}
+            >
+              {item.status}
+            </span>
+          )}
         </div>
 
         {/* AI Tag Overlay (Bottom Left) */}
@@ -120,7 +134,17 @@ export const ItemCard: React.FC<ItemCardProps> = ({
             <span className="truncate font-medium">{item.location.split('/')[0]}</span>
           </div>
 
-          <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+            {isLost && onReportFound && (
+              <button
+                onClick={() => onReportFound(item)}
+                title="I found this item — report match to notify owner"
+                className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[10px] font-bold flex items-center gap-1 shadow-xs transition-colors"
+              >
+                <Sparkles className="w-3 h-3" />
+                <span>Report Found</span>
+              </button>
+            )}
             <button
               onClick={() => onOpenChat(item)}
               title="Open In-App Secure Chat"
