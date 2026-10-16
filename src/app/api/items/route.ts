@@ -7,7 +7,12 @@ import { Item } from '@/types/portal';
 
 const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseUrl = rawUrl && rawUrl.startsWith('http') ? rawUrl : 'https://placeholder.supabase.co';
-const rawKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const rawKey =
+  process.env.SUPABASE_SERVICE_ROLE_KEY &&
+  !process.env.SUPABASE_SERVICE_ROLE_KEY.includes('your_supabase') &&
+  (process.env.SUPABASE_SERVICE_ROLE_KEY.startsWith('ey') || process.env.SUPABASE_SERVICE_ROLE_KEY.startsWith('sb_'))
+    ? process.env.SUPABASE_SERVICE_ROLE_KEY
+    : process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const supabaseAnonKey = rawKey || 'placeholder-anon-key';
 
 function getSupabase() {
