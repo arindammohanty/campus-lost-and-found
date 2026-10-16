@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { Item, User, ItemLifecycleStatus } from '../types/portal';
+import { isItemOwnedByUser } from '../utils/portalStorage';
 import {
   X,
   MapPin,
@@ -49,7 +50,7 @@ export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({
   onOpenMatchRadar,
   onStatusChange,
 }) => {
-  const isOwner = currentUser ? item.userId === currentUser.id : false;
+  const isOwner = isItemOwnedByUser(item, currentUser);
   const isHelpDesk = currentUser ? currentUser.role === 'helpdesk_admin' : false;
   const isLost = item.type === 'Lost';
 

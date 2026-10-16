@@ -317,10 +317,75 @@ export function setActiveUser(user: User): void {
   writeStorage(STORAGE_KEYS.CURRENT_USER, user);
 }
 
+/**
+ * Checks whether an item is owned / reported by the specified user.
+ * Matches across:
+ * 1. Exact user ID (`item.userId === user.id`)
+ * 2. University Registration Number (`item.userRoll === user.rollNumber`)
+ * 3. Campus Email (`item.userEmail === user.email`)
+ * 4. User Roll embedded in item.userName or item.userId
+ */
+export function isItemOwnedByUser(
+  item: Item | null | undefined,
+  user: User | null | undefined
+): boolean {
+  if (!item || !user) return false;
+
+  // 1. Exact user ID match
+  if (item.userId && user.id && item.userId === user.id) {
+    return true;
+  }
+
+  // 2. Canonical University Registration Number match (e.g., 250301120059)
+  const normUserRoll = user.rollNumber?.trim().toLowerCase();
+  const normItemRoll = item.userRoll?.trim().toLowerCase();
+  if (normUserRoll && normItemRoll && normUserRoll === normItemRoll) {
+    return true;
+  }
+
+  // 3. Official Email match
+  const normUserEmail = user.email?.trim().toLowerCase();
+  const normItemEmail = item.userEmail?.trim().toLowerCase();
+  if (normUserEmail && normItemEmail && normUserEmail === normItemEmail) {
+    return true;
+  }
+
+  // 4. Substring roll check (for guest/legacy entries like 'Student (250301120059)')
+  if (normUserRoll && normUserRoll.length >= 6) {
+    if (item.userName && item.userName.toLowerCase().includes(normUserRoll)) {
+      return true;
+    }
+    if (item.userId && item.userId.toLowerCase().includes(normUserRoll)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 export function registerPortalUser(userData: Omit<User, 'id'> & { id?: string }): User {
   const users = getPortalUsers();
+  const normalizedRoll = userData.rollNumber?.trim().toLowerCase();
+  const normalizedEmail = userData.email?.trim().toLowerCase();
+
+  const existingIdx = users.findIndex(
+    (u) =>
+      (normalizedEmail && u.email && u.email.toLowerCase() === normalizedEmail) ||
+      (normalizedRoll && u.rollNumber && u.rollNumber.toLowerCase() === normalizedRoll)
+  );
+
+  const canonicalId =
+    userData.id ||
+    (existingIdx >= 0 && users[existingIdx].id
+      ? users[existingIdx].id
+      : normalizedRoll
+      ? `user-${normalizedRoll}`
+      : normalizedEmail
+      ? `user-${normalizedEmail.replace(/[^a-z0-9]/g, '_')}`
+      : `user-${Date.now()}`);
+
   const newUser: User = {
-    id: userData.id || `user-${Date.now()}`,
+    id: canonicalId,
     name: userData.name,
     email: userData.email,
     rollNumber: userData.rollNumber,
@@ -329,13 +394,11 @@ export function registerPortalUser(userData: Omit<User, 'id'> & { id?: string })
     role: userData.role || 'student',
     year: userData.year,
     phone: userData.phone,
-    avatarUrl: userData.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(userData.name)}`,
+    avatarUrl:
+      userData.avatarUrl ||
+      `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(userData.name)}`,
   };
 
-  const existingIdx = users.findIndex(
-    u => (u.email && u.email.toLowerCase() === newUser.email.toLowerCase()) || 
-         (u.rollNumber && u.rollNumber.toLowerCase() === newUser.rollNumber.toLowerCase())
-  );
   if (existingIdx >= 0) {
     users[existingIdx] = { ...users[existingIdx], ...newUser };
   } else {

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Item, User, ChatMessage } from '../types/portal';
-import { getChatMessages, sendChatMessage, getChatThreadsForItem } from '../utils/portalStorage';
+import { getChatMessages, sendChatMessage, getChatThreadsForItem, isItemOwnedByUser } from '../utils/portalStorage';
 import {
   X,
   Send,
@@ -33,7 +33,7 @@ export const SecureChatModal: React.FC<SecureChatModalProps> = ({
   const [inputText, setInputText] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const isOwner = item.userId === currentUser.id;
+  const isOwner = isItemOwnedByUser(item, currentUser);
   const isOfficer = currentUser.role === 'helpdesk_admin';
   const isPrivileged = isOwner || isOfficer;
 

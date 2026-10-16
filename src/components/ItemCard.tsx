@@ -2,7 +2,8 @@
 
 import React from 'react';
 import { Item, User } from '../types/portal';
-import { MapPin, Calendar, Clock, Sparkles, MessageSquare, ShieldCheck, Tag } from 'lucide-react';
+import { isItemOwnedByUser } from '../utils/portalStorage';
+import { MapPin, Calendar, Clock, Sparkles, MessageSquare, ShieldCheck, Tag, UserCheck } from 'lucide-react';
 
 interface ItemCardProps {
   item: Item;
@@ -20,7 +21,7 @@ export const ItemCard: React.FC<ItemCardProps> = ({
   onOpenHandover,
 }) => {
   const isLost = item.type === 'Lost';
-  const isOwner = currentUser ? item.userId === currentUser.id : false;
+  const isOwner = isItemOwnedByUser(item, currentUser);
 
   const getStatusBadge = () => {
     switch (item.status) {
@@ -40,7 +41,9 @@ export const ItemCard: React.FC<ItemCardProps> = ({
   return (
     <div
       onClick={() => onOpenDetails(item)}
-      className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xs hover:shadow-xl hover:-translate-y-1 transition-all duration-200 cursor-pointer flex flex-col group"
+      className={`bg-white rounded-3xl border overflow-hidden shadow-xs hover:shadow-xl hover:-translate-y-1 transition-all duration-200 cursor-pointer flex flex-col group ${
+        isOwner ? 'border-indigo-300 ring-2 ring-indigo-500/20' : 'border-slate-200'
+      }`}
     >
       {/* Item Image with Type & Status Overlays */}
       <div className="relative aspect-video bg-slate-100 overflow-hidden">
@@ -50,8 +53,8 @@ export const ItemCard: React.FC<ItemCardProps> = ({
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
         />
 
-        {/* Type Badge (Top Left) */}
-        <div className="absolute top-3 left-3">
+        {/* Type Badge & Owner Pill (Top Left) */}
+        <div className="absolute top-3 left-3 flex items-center gap-1.5">
           <span
             className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-xl shadow-md ${
               isLost ? 'bg-amber-500 text-slate-950' : 'bg-emerald-500 text-slate-950'
@@ -59,6 +62,12 @@ export const ItemCard: React.FC<ItemCardProps> = ({
           >
             {item.type}
           </span>
+          {isOwner && (
+            <span className="bg-slate-900/90 backdrop-blur-md text-amber-400 border border-amber-400/40 text-[9px] font-bold px-2 py-0.5 rounded-lg flex items-center gap-1 shadow-md">
+              <UserCheck className="w-2.5 h-2.5" />
+              My Report
+            </span>
+          )}
         </div>
 
         {/* Lifecycle Status Pill (Top Right) */}

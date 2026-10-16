@@ -22,6 +22,7 @@ import {
   markNotificationAsRead,
   getHandoverTickets,
   syncPortalItemsWithServer,
+  isItemOwnedByUser,
 } from '../utils/portalStorage';
 import { CATEGORIES, CAMPUS_LOCATIONS } from '../data/campusData';
 
@@ -57,6 +58,8 @@ import {
   X,
   MessageSquare,
   AlertTriangle,
+  PackageSearch,
+  UserCheck,
 } from 'lucide-react';
 
 export default function Home() {
@@ -652,78 +655,180 @@ export default function Home() {
               </button>
             </div>
           ) : (
-            <div className="space-y-6">
-              <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider block mb-1">
-                    Student Dashboard
-                  </span>
-                  <h3 className="font-bold text-2xl text-slate-900">{currentUser.name}&apos;s Activity</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Roll No: <span className="font-mono text-slate-700">{currentUser.rollNumber}</span> • {currentUser.branch}
-                  </p>
-                </div>
+            (() => {
+              const myLostItems = items.filter((i) => isItemOwnedByUser(i, currentUser) && i.type === 'Lost');
+              const myFoundItems = items.filter((i) => isItemOwnedByUser(i, currentUser) && i.type === 'Found');
+              const myAllItems = [...myLostItems, ...myFoundItems];
+              const myMatchCount = myAllItems.filter((i) => i.status === 'Match Found').length;
+              const myHandoverCount = myAllItems.filter((i) => i.status === 'In Handover').length;
+              const myReturnedCount = myAllItems.filter((i) => i.status === 'Returned').length;
 
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => handleOpenReportModal('Lost')}
-                    className="bg-amber-500 text-slate-950 font-bold text-xs px-4 py-2.5 rounded-xl shadow-xs"
-                  >
-                    + Report Lost Item
-                  </button>
-                  <button
-                    onClick={() => handleOpenReportModal('Found')}
-                    className="bg-emerald-600 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-xs"
-                  >
-                    + Report Found Item
-                  </button>
-                </div>
-              </div>
+              return (
+                <div className="space-y-6">
+                  {/* User Profile & Quick Actions */}
+                  <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider bg-indigo-50 border border-indigo-200/80 px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <UserCheck className="w-3 h-3 text-indigo-600" />
+                          Verified Campus Identity
+                        </span>
+                        {currentUser.role === 'helpdesk_admin' && (
+                          <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                            Help Desk Officer
+                          </span>
+                        )}
+                      </div>
+                      <h3 className="font-bold text-2xl text-slate-900">{currentUser.name}&apos;s Activity Hub</h3>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Registration No: <span className="font-mono font-bold text-slate-800">{currentUser.rollNumber}</span> • {currentUser.branch}
+                      </p>
+                    </div>
 
-              {/* My Lost Items */}
-              <div>
-                <h4 className="font-bold text-base text-slate-900 mb-3 flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-full bg-amber-500" />
-                  My Lost Item Reports ({items.filter((i) => i.userId === currentUser.id && i.type === 'Lost').length})
-                </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {items
-                    .filter((i) => i.userId === currentUser.id && i.type === 'Lost')
-                    .map((item) => (
-                      <ItemCard
-                        key={item.id}
-                        item={item}
-                        currentUser={currentUser}
-                        onOpenDetails={(i) => setActiveItemForDetails(i)}
-                        onOpenChat={(i) => handleOpenChat(i)}
-                        onOpenHandover={(i) => handleOpenHandover(i)}
-                      />
-                    ))}
-                </div>
-              </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleOpenReportModal('Lost')}
+                        className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs px-4 py-2.5 rounded-xl shadow-xs transition-all flex items-center gap-1.5"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Report Lost Item</span>
+                      </button>
+                      <button
+                        onClick={() => handleOpenReportModal('Found')}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-xs transition-all flex items-center gap-1.5"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Report Found Item</span>
+                      </button>
+                    </div>
+                  </div>
 
-              {/* My Found Reports */}
-              <div className="pt-4 border-t border-slate-200">
-                <h4 className="font-bold text-base text-slate-900 mb-3 flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-full bg-emerald-500" />
-                  My Found Submissions ({items.filter((i) => i.userId === currentUser.id && i.type === 'Found').length})
-                </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {items
-                    .filter((i) => i.userId === currentUser.id && i.type === 'Found')
-                    .map((item) => (
-                      <ItemCard
-                        key={item.id}
-                        item={item}
-                        currentUser={currentUser}
-                        onOpenDetails={(i) => setActiveItemForDetails(i)}
-                        onOpenChat={(i) => handleOpenChat(i)}
-                        onOpenHandover={(i) => handleOpenHandover(i)}
-                      />
-                    ))}
+                  {/* Summary Metric Cards */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                        Tracked Listings
+                      </span>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-2xl font-black text-slate-900">{myAllItems.length}</span>
+                        <span className="text-[11px] text-slate-500 font-medium">({myLostItems.length} Lost / {myFoundItems.length} Found)</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-purple-600 block mb-1 flex items-center gap-1">
+                        <Sparkles className="w-3.5 h-3.5" />
+                        AI Matches
+                      </span>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-2xl font-black text-purple-700">{myMatchCount}</span>
+                        <span className="text-[11px] text-slate-500 font-medium">Candidates</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-600 block mb-1 flex items-center gap-1">
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                        In Handover
+                      </span>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-2xl font-black text-indigo-700">{myHandoverCount}</span>
+                        <span className="text-[11px] text-slate-500 font-medium">At Help Desk</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 block mb-1 flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Reunited
+                      </span>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-2xl font-black text-emerald-700">{myReturnedCount}</span>
+                        <span className="text-[11px] text-slate-500 font-medium">Resolved</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* My Lost Items */}
+                  <div>
+                    <h4 className="font-bold text-base text-slate-900 mb-3 flex items-center gap-2">
+                      <span className="w-3 h-3 rounded-full bg-amber-500" />
+                      My Lost Item Reports ({myLostItems.length})
+                    </h4>
+                    {myLostItems.length === 0 ? (
+                      <div className="bg-white border border-dashed border-slate-200 rounded-3xl p-8 text-center max-w-lg mx-auto">
+                        <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto mb-3">
+                          <PackageSearch className="w-6 h-6" />
+                        </div>
+                        <h5 className="font-bold text-sm text-slate-800 mb-1">No Lost Items Reported</h5>
+                        <p className="text-xs text-slate-500 mb-4 max-w-xs mx-auto">
+                          Misplaced something on campus? Register a lost item report to activate real-time AI scanning and campus alerts.
+                        </p>
+                        <button
+                          onClick={() => handleOpenReportModal('Lost')}
+                          className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-xs inline-flex items-center gap-1.5"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Report Lost Item</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {myLostItems.map((item) => (
+                          <ItemCard
+                            key={item.id}
+                            item={item}
+                            currentUser={currentUser}
+                            onOpenDetails={(i) => setActiveItemForDetails(i)}
+                            onOpenChat={(i) => handleOpenChat(i)}
+                            onOpenHandover={(i) => handleOpenHandover(i)}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* My Found Reports */}
+                  <div className="pt-4 border-t border-slate-200">
+                    <h4 className="font-bold text-base text-slate-900 mb-3 flex items-center gap-2">
+                      <span className="w-3 h-3 rounded-full bg-emerald-500" />
+                      My Found Submissions ({myFoundItems.length})
+                    </h4>
+                    {myFoundItems.length === 0 ? (
+                      <div className="bg-white border border-dashed border-slate-200 rounded-3xl p-8 text-center max-w-lg mx-auto">
+                        <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-3">
+                          <ShieldCheck className="w-6 h-6" />
+                        </div>
+                        <h5 className="font-bold text-sm text-slate-800 mb-1">No Found Submissions Yet</h5>
+                        <p className="text-xs text-slate-500 mb-4 max-w-xs mx-auto">
+                          Found an unattended item around classrooms or the library? Log it here to help reunite it with its rightful owner.
+                        </p>
+                        <button
+                          onClick={() => handleOpenReportModal('Found')}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-xs inline-flex items-center gap-1.5"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Report Found Item</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {myFoundItems.map((item) => (
+                          <ItemCard
+                            key={item.id}
+                            item={item}
+                            currentUser={currentUser}
+                            onOpenDetails={(i) => setActiveItemForDetails(i)}
+                            onOpenChat={(i) => handleOpenChat(i)}
+                            onOpenHandover={(i) => handleOpenHandover(i)}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </div>
+              );
+            })()
           )
         )}
 
@@ -797,7 +902,7 @@ export default function Home() {
                             <span className="text-[10px] text-slate-400 uppercase font-bold block">
                               Handover PIN
                             </span>
-                            {currentUser && (currentUser.role === 'helpdesk_admin' || currentUser.id === item.userId) ? (
+                            {currentUser && (currentUser.role === 'helpdesk_admin' || isItemOwnedByUser(item, currentUser)) ? (
                               <span className="text-base font-black font-mono tracking-widest text-indigo-700">
                                 {item.handoverCode || '482910'}
                               </span>

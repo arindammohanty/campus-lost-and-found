@@ -7,6 +7,7 @@ import {
   createHandoverTicket,
   getHandoverTickets,
   verifyHandoverAtDesk,
+  isItemOwnedByUser,
 } from '../utils/portalStorage';
 import QRCode from 'qrcode';
 import {
@@ -53,8 +54,8 @@ export const HandoverModal: React.FC<HandoverModalProps> = ({
   const [officerNotes, setOfficerNotes] = useState('');
   const [copied, setCopied] = useState(false);
 
-  const isFinderDepositing = item.type === 'Found' && currentUser.id === item.userId;
-  const isOwner = currentUser.id === item.userId;
+  const isOwner = isItemOwnedByUser(item, currentUser);
+  const isFinderDepositing = item.type === 'Found' && isOwner;
   const isAuthorizedToViewPass = isHelpDeskOfficer || isOwner || (ticket && ticket.claimantId === currentUser.id);
   const currentPin = isAuthorizedToViewPass ? (ticket?.handoverCode || item.handoverCode || '482910') : '••••••';
 
