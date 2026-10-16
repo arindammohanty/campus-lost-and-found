@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { User } from '../types/portal';
-import { registerPortalUser, getPortalUsers, setActiveUser } from '../utils/portalStorage';
+import { registerPortalUser, getPortalUsers, setActiveUser, ADMIN_CREDENTIALS, ADMIN_USER } from '../utils/portalStorage';
 import {
   X,
   Compass,
@@ -72,6 +72,27 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setLoading(true);
 
     try {
+      // 1. SPECIFIC ADMIN CREDENTIAL VALIDATION (Campus Collection Desk Admin)
+      if (
+        trimmed === ADMIN_CREDENTIALS.email.toLowerCase() ||
+        trimmed === ADMIN_CREDENTIALS.rollNumber.toLowerCase() ||
+        trimmed === 'admin'
+      ) {
+        if (signInPassword !== ADMIN_CREDENTIALS.password) {
+          setErrorMessage('Invalid password for Campus Desk Administrator account.');
+          setLoading(false);
+          return;
+        }
+
+        setActiveUser(ADMIN_USER);
+        setSuccessMessage(`Welcome Campus Administrator, ${ADMIN_USER.name}!`);
+        setTimeout(() => {
+          onSuccess(ADMIN_USER);
+          onClose();
+        }, 500);
+        return;
+      }
+
       const users = getPortalUsers();
       const matched = users.find(
         (u) =>
@@ -444,6 +465,32 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-600 font-medium"
                 />
               </div>
+            </div>
+
+            {/* Quick Fill for Collection Desk Admin */}
+            <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/80 rounded-2xl p-3 text-left shadow-xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-amber-600" />
+                  <span className="text-[11px] font-bold text-amber-900">Campus Collection Desk Admin</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSignInIdentifier(ADMIN_CREDENTIALS.email);
+                    setSignInPassword(ADMIN_CREDENTIALS.password);
+                    setErrorMessage('');
+                  }}
+                  className="text-[10px] font-bold text-indigo-700 hover:text-indigo-900 bg-white border border-amber-300 px-2.5 py-1 rounded-lg transition-colors shadow-2xs"
+                >
+                  Quick Fill Admin
+                </button>
+              </div>
+              <p className="text-[10px] text-amber-800/90 mt-1">
+                Admin Email: <span className="font-mono font-bold text-slate-900">{ADMIN_CREDENTIALS.email}</span>
+                <br />
+                Authority: Accept collection requests &amp; claims at campus desks
+              </p>
             </div>
 
             {/* ERROR MESSAGE DIRECTLY ABOVE BUTTON */}

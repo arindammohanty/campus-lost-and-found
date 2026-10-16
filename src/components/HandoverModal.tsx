@@ -8,6 +8,7 @@ import {
   getHandoverTickets,
   verifyHandoverAtDesk,
   isItemOwnedByUser,
+  acceptClaimRequest,
 } from '../utils/portalStorage';
 import QRCode from 'qrcode';
 import {
@@ -348,6 +349,67 @@ export const HandoverModal: React.FC<HandoverModalProps> = ({
                     Registered Secret Detail on Record:
                   </span>
                   <p className="text-xs font-semibold text-slate-800">{item.identifyingDetails}</p>
+                </div>
+              )}
+
+              {/* Active Student Claim Ticket Details if present */}
+              {ticket && (
+                <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5 text-amber-600" />
+                      Active Student Collection Claim
+                    </span>
+                    <span className="text-[10px] font-bold bg-amber-200/60 text-amber-900 px-2 py-0.5 rounded-full">
+                      {ticket.status}
+                    </span>
+                  </div>
+
+                  <div className="text-xs text-slate-700 space-y-1">
+                    <p>
+                      Claimant: <strong className="text-slate-900">{ticket.claimantName}</strong> • Reg:{' '}
+                      <code className="font-mono font-bold text-indigo-700">{ticket.claimantRoll}</code>
+                    </p>
+                    <p>
+                      Assigned Collection Desk: <strong>{ticket.helpDeskLocation}</strong>
+                    </p>
+                    <p>
+                      Pass PIN: <code className="font-mono font-bold text-indigo-700">{ticket.handoverCode}</code>
+                    </p>
+                  </div>
+
+                  <div className="bg-white border border-amber-200/80 rounded-xl p-2.5">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase block mb-0.5">
+                      Student Submitted Secret Proof:
+                    </span>
+                    <p className="text-xs font-semibold text-slate-800 italic">"{ticket.secretDetailProof}"</p>
+                  </div>
+
+                  {ticket.status === 'Pending Verification' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const res = acceptClaimRequest(
+                          ticket.id,
+                          currentUser.name,
+                          officerNotes || 'Claim verified & collection accepted by Desk Officer.'
+                        );
+                        if (res.success) {
+                          setMessage({ text: res.message, type: 'success' });
+                          setTimeout(() => {
+                            onSuccess();
+                            onClose();
+                          }, 1200);
+                        } else {
+                          setMessage({ text: res.message, type: 'error' });
+                        }
+                      }}
+                      className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Accept Collection Request &amp; Release Item</span>
+                    </button>
+                  )}
                 </div>
               )}
 

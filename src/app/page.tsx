@@ -10,6 +10,7 @@ import {
   ItemType,
   ItemLifecycleStatus,
   PlatformNotification,
+  HandoverTicket,
 } from '../types/portal';
 import {
   initializePortalStorage,
@@ -26,6 +27,12 @@ import {
   isItemArchived,
   getItemAgeInDays,
   createNotification,
+  acceptClaimRequest,
+  rejectClaimRequest,
+  verifyHandoverAtDesk,
+  ADMIN_CREDENTIALS,
+  ADMIN_USER,
+  signOutPortalUser,
 } from '../utils/portalStorage';
 import { CATEGORIES, CAMPUS_LOCATIONS } from '../data/campusData';
 
@@ -64,6 +71,8 @@ import {
   PackageSearch,
   UserCheck,
   Archive,
+  Lock,
+  AlertCircle,
 } from 'lucide-react';
 
 export default function Home() {
@@ -96,7 +105,13 @@ export default function Home() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authModalTab, setAuthModalTab] = useState<'signin' | 'signup'>('signin');
 
-  // 4. Toast Message
+  // 4. Handover & Collection Tickets State
+  const [tickets, setTickets] = useState<HandoverTicket[]>([]);
+  const [claimStatusFilter, setClaimStatusFilter] = useState<'All' | 'Pending Verification' | 'Completed' | 'Rejected'>('All');
+  const [counterPinInput, setCounterPinInput] = useState('');
+  const [counterVerifyMessage, setCounterVerifyMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
+  // 5. Toast Message
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
@@ -109,11 +124,53 @@ export default function Home() {
   const refreshAllData = (userOverride?: User | null) => {
     const userToUse = userOverride !== undefined ? userOverride : currentUser;
     setItems(getPortalItems());
+    setTickets(getHandoverTickets());
     if (userToUse) {
       setNotifications(getPortalNotifications(userToUse.id));
     } else {
       setNotifications([]);
     }
+  };
+
+  const handleAdminQuickLogin = () => {
+    setActiveUser(ADMIN_USER);
+    setCurrentUserState(ADMIN_USER);
+    refreshAllData(ADMIN_USER);
+    showToast(`Signed in as Campus Desk Administrator (${ADMIN_USER.name})!`);
+  };
+
+  const handleAcceptClaim = (ticketId: string) => {
+    const officerName = currentUser?.name || 'Arindam Mohanty';
+    const res = acceptClaimRequest(ticketId, officerName);
+    if (res.success) {
+      showToast(res.message);
+      refreshAllData();
+    } else {
+      showToast(res.message);
+    }
+  };
+
+  const handleRejectClaim = (ticketId: string) => {
+    const officerName = currentUser?.name || 'Arindam Mohanty';
+    const res = rejectClaimRequest(ticketId, officerName);
+    showToast(res.message);
+    refreshAllData();
+  };
+
+  const handleCounterVerify = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!counterPinInput.trim()) return;
+    const officerName = currentUser?.name || 'Arindam Mohanty';
+    const res = verifyHandoverAtDesk(counterPinInput.trim(), counterPinInput.trim(), officerName);
+    if (res.success) {
+      setCounterVerifyMessage({ text: res.message, type: 'success' });
+      showToast(res.message);
+      setCounterPinInput('');
+      refreshAllData();
+    } else {
+      setCounterVerifyMessage({ text: res.message, type: 'error' });
+    }
+    setTimeout(() => setCounterVerifyMessage(null), 4000);
   };
 
   useEffect(() => {
@@ -947,33 +1004,341 @@ export default function Home() {
           )
         )}
 
-        {/* TAB 5: Campus Help Desk Handover View */}
+        {/* TAB 5: Campus Help Desk Handover & Collection Claims Management View */}
         {activeTab === 'helpdesk' && (
           <div className="space-y-6">
-            <div className="bg-gradient-to-r from-indigo-950 via-slate-900 to-indigo-900 rounded-3xl p-6 text-white shadow-xl flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <span className="bg-indigo-500/20 text-indigo-300 font-bold text-[10px] uppercase tracking-wider px-2.5 py-0.5 rounded-full border border-indigo-500/30 flex items-center gap-1 w-fit mb-2">
-                  <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
-                  Official Campus Facilities
+            {/* Header Banner */}
+            <div className="bg-gradient-to-r from-indigo-950 via-slate-900 to-indigo-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl flex flex-wrap items-center justify-between gap-6">
+              <div className="max-w-2xl">
+                <span className="bg-indigo-500/20 text-indigo-300 font-bold text-[10px] uppercase tracking-wider px-3 py-1 rounded-full border border-indigo-500/30 flex items-center gap-1.5 w-fit mb-3">
+                  <ShieldCheck className="w-4 h-4 text-indigo-400" />
+                  Official Campus Operations
                 </span>
-                <h3 className="font-black text-2xl text-white">Campus Help Desk Handover Operations</h3>
-                <p className="text-xs text-slate-300 max-w-xl mt-1">
-                  Physical exchange verification point. Students can show their 6-digit Handover PIN or
-                  QR Code at designated Help Desks for safe item collection.
+                <h3 className="font-black text-2xl sm:text-3xl text-white tracking-tight">
+                  Campus Collection Desks &amp; Claims Operations
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-300 mt-2 leading-relaxed">
+                  Authorized collection and verification center. Review and accept student claims for found items,
+                  verify secret ownership details, and authorize safe physical collection at campus help desks.
                 </p>
+
+                {/* Admin Status Pill */}
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  {currentUser?.role === 'helpdesk_admin' || currentUser?.email === ADMIN_CREDENTIALS.email ? (
+                    <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-3 py-1.5 flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                      <span className="text-xs font-bold text-emerald-300">
+                        Admin Authorized: {currentUser.name} ({currentUser.email})
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-amber-300 font-medium">
+                        Student / Guest View (Read-Only Claim Tracking)
+                      </span>
+                      <button
+                        onClick={handleAdminQuickLogin}
+                        className="bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs px-3.5 py-1.5 rounded-xl transition-all shadow-md flex items-center gap-1.5"
+                      >
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                        Sign In as Collection Desk Admin
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
 
-              <div className="text-right">
-                <span className="text-xs text-slate-400 block font-medium">
-                  Logged in as:
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-4 sm:p-5 text-right backdrop-blur-xs min-w-[220px]">
+                <span className="text-[11px] text-slate-400 block font-medium uppercase tracking-wider">
+                  Active Session
                 </span>
-                <span className="text-sm font-bold text-amber-400">
-                  {currentUser ? `${currentUser.name} (${currentUser.role === 'helpdesk_admin' ? 'Officer' : 'Student'})` : 'Guest / Visitor'}
+                <span className="text-base font-bold text-white block mt-0.5">
+                  {currentUser ? currentUser.name : 'Guest Visitor'}
                 </span>
+                <span className="text-xs font-mono text-amber-400 block">
+                  {currentUser?.role === 'helpdesk_admin' ? '🛡️ Campus Collection Desk Officer' : currentUser?.rollNumber ? `Reg: ${currentUser.rollNumber}` : 'Unauthenticated'}
+                </span>
+                {currentUser && (
+                  <button
+                    onClick={() => {
+                      signOutPortalUser();
+                      setCurrentUserState(null);
+                      refreshAllData(null);
+                      showToast('Signed out.');
+                    }}
+                    className="text-[11px] font-bold text-slate-400 hover:text-rose-300 underline mt-2 block ml-auto transition-colors"
+                  >
+                    Switch Account
+                  </button>
+                )}
               </div>
             </div>
 
-            {/* Items currently in handover */}
+            {/* SECTION 1: INCOMING COLLECTION REQUESTS & CLAIMS */}
+            <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-5">
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-indigo-600" />
+                    <h4 className="font-bold text-lg text-slate-900">
+                      Collection Requests &amp; Student Claims
+                    </h4>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Students submit claims with secret ownership proof to collect items at designated desks.
+                  </p>
+                </div>
+
+                {/* Filter Pills */}
+                <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
+                  {(['All', 'Pending Verification', 'Completed', 'Rejected'] as const).map((st) => (
+                    <button
+                      key={st}
+                      onClick={() => setClaimStatusFilter(st)}
+                      className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
+                        claimStatusFilter === st
+                          ? 'bg-white text-slate-900 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      {st === 'All' ? 'All Claims' : st}
+                      {st === 'Pending Verification' && (
+                        <span className="ml-1.5 bg-amber-100 text-amber-800 text-[10px] px-1.5 py-0.2 rounded-full font-mono">
+                          {tickets.filter((t) => t.status === 'Pending Verification').length}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Tickets List */}
+              {(() => {
+                const filteredTickets = tickets.filter((t) =>
+                  claimStatusFilter === 'All' ? true : t.status === claimStatusFilter
+                );
+
+                if (filteredTickets.length === 0) {
+                  return (
+                    <div className="text-center py-12 text-slate-400">
+                      <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-2 opacity-80" />
+                      <p className="text-sm font-bold text-slate-700">No collection requests found</p>
+                      <p className="text-xs text-slate-500 mt-1">
+                        {claimStatusFilter === 'All'
+                          ? 'No student claims currently filed for campus collection desks.'
+                          : `No claims matching filter "${claimStatusFilter}".`}
+                      </p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="grid grid-cols-1 gap-4">
+                    {filteredTickets.map((ticket) => {
+                      const associatedItem = items.find((i) => i.id === ticket.itemId);
+                      const isPending = ticket.status === 'Pending Verification';
+                      const isCompleted = ticket.status === 'Completed';
+                      const isRejected = ticket.status === 'Rejected';
+
+                      return (
+                        <div
+                          key={ticket.id}
+                          className={`rounded-2xl border p-5 transition-all ${
+                            isPending
+                              ? 'bg-amber-50/30 border-amber-200 ring-1 ring-amber-300/40'
+                              : isCompleted
+                              ? 'bg-emerald-50/20 border-emerald-200'
+                              : 'bg-slate-50 border-slate-200 opacity-75'
+                          }`}
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-4">
+                            {/* Left: Item & Claimant info */}
+                            <div className="flex items-start gap-4 flex-1 min-w-[280px]">
+                              {associatedItem?.imageUrl ? (
+                                <img
+                                  src={associatedItem.imageUrl}
+                                  alt={ticket.itemTitle}
+                                  className="w-16 h-16 rounded-2xl object-cover shrink-0 border border-slate-200 shadow-2xs"
+                                />
+                              ) : (
+                                <div className="w-16 h-16 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
+                                  <Package className="w-7 h-7" />
+                                </div>
+                              )}
+
+                              <div className="space-y-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="text-[10px] font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full uppercase">
+                                    {ticket.itemType} Claim
+                                  </span>
+                                  <span className="text-[11px] font-mono text-slate-400">
+                                    Ticket #{ticket.id.slice(-8)}
+                                  </span>
+                                  <span
+                                    className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
+                                      isPending
+                                        ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                        : isCompleted
+                                        ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                                        : 'bg-rose-100 text-rose-900 border border-rose-300'
+                                    }`}
+                                  >
+                                    {ticket.status}
+                                  </span>
+                                </div>
+
+                                <h5 className="font-bold text-base text-slate-900">
+                                  {ticket.itemTitle}
+                                </h5>
+
+                                <div className="text-xs text-slate-600 flex flex-wrap items-center gap-x-4 gap-y-1">
+                                  <span>
+                                    👤 Claimant: <strong className="text-slate-800">{ticket.claimantName}</strong>
+                                  </span>
+                                  <span>
+                                    🎓 Reg No: <code className="font-mono font-bold text-indigo-700">{ticket.claimantRoll}</code>
+                                  </span>
+                                  <span>
+                                    🏢 Collection Desk: <strong className="text-slate-800">{ticket.helpDeskLocation}</strong>
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Right: Security Handover PIN */}
+                            <div className="text-right shrink-0">
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                                Handover PIN
+                              </span>
+                              <span className="text-lg font-black font-mono tracking-widest text-indigo-700">
+                                {ticket.handoverCode}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Secret Detail Proof Box */}
+                          <div className="mt-4 bg-white border border-slate-200 rounded-xl p-3.5 shadow-2xs">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5 mb-1">
+                              <Lock className="w-3.5 h-3.5 text-amber-600" />
+                              Claimant Confidential Proof of Ownership / Identifying Details:
+                            </span>
+                            <p className="text-xs font-semibold text-slate-800 bg-amber-50/60 p-2.5 rounded-lg border border-amber-200/60 italic">
+                              "{ticket.secretDetailProof}"
+                            </p>
+                            {ticket.officerNotes && (
+                              <p className="text-[11px] text-slate-500 mt-2">
+                                📝 <strong>Officer Notes:</strong> {ticket.officerNotes}
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Admin Action Buttons */}
+                          <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+                            <span className="text-[11px] text-slate-400 font-medium">
+                              Filed on {new Date(ticket.createdAt).toLocaleDateString()} at {new Date(ticket.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+
+                            <div className="flex flex-wrap items-center gap-2">
+                              {/* Open Item Details Modal */}
+                              {associatedItem && (
+                                <button
+                                  onClick={() => setActiveItemForDetails(associatedItem)}
+                                  className="text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-xl transition-colors"
+                                >
+                                  View Item
+                                </button>
+                              )}
+
+                              {/* Actions for Pending Verification */}
+                              {isPending && (
+                                <>
+                                  <button
+                                    onClick={() => handleRejectClaim(ticket.id)}
+                                    className="text-xs font-bold text-rose-600 hover:text-rose-800 hover:bg-rose-50 px-3 py-1.5 rounded-xl border border-rose-200 transition-colors"
+                                  >
+                                    ✕ Reject Claim
+                                  </button>
+
+                                  <button
+                                    onClick={() => handleAcceptClaim(ticket.id)}
+                                    className="text-xs font-bold bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white px-4 py-2 rounded-xl transition-all shadow-md shadow-emerald-600/20 flex items-center gap-1.5"
+                                  >
+                                    <CheckCircle2 className="w-4 h-4" />
+                                    <span>Accept Collection Request &amp; Release</span>
+                                  </button>
+                                </>
+                              )}
+
+                              {isCompleted && (
+                                <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-3 py-1.5 rounded-xl flex items-center gap-1">
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  Claim Accepted &amp; Item Released
+                                </span>
+                              )}
+
+                              {isRejected && (
+                                <span className="text-xs font-bold text-rose-700 bg-rose-100 px-3 py-1.5 rounded-xl">
+                                  Claim Rejected
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* SECTION 2: PHYSICAL COUNTER QUICK PIN VERIFIER */}
+            <div className="bg-gradient-to-br from-slate-900 to-indigo-950 text-white rounded-3xl p-6 sm:p-7 shadow-xl">
+              <div className="max-w-xl">
+                <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-widest block mb-1">
+                  Help Desk Counter Console
+                </span>
+                <h4 className="text-lg font-black text-white">Physical Handover PIN Verifier</h4>
+                <p className="text-xs text-slate-300 mt-1 mb-4 leading-relaxed">
+                  When a student visits the physical collection desk, type their 6-digit Handover PIN or scan their pass QR code to verify and release custody instantly.
+                </p>
+
+                <form onSubmit={handleCounterVerify} className="flex flex-wrap items-center gap-2">
+                  <div className="relative flex-1 min-w-[200px]">
+                    <QrCode className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={counterPinInput}
+                      onChange={(e) => setCounterPinInput(e.target.value)}
+                      placeholder="Enter 6-digit PIN (e.g. 746430)"
+                      maxLength={10}
+                      className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white text-xs font-mono font-bold tracking-widest focus:outline-none focus:ring-2 focus:ring-amber-400 placeholder:text-slate-400"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    className="bg-amber-400 hover:bg-amber-300 active:bg-amber-500 text-slate-950 font-bold text-xs px-5 py-2.5 rounded-xl transition-all shadow-md flex items-center gap-1.5 shrink-0"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Verify &amp; Accept Collection</span>
+                  </button>
+                </form>
+
+                {counterVerifyMessage && (
+                  <div
+                    className={`mt-3 p-3 rounded-xl text-xs flex items-center gap-2 ${
+                      counterVerifyMessage.type === 'success'
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                        : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                    }`}
+                  >
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{counterVerifyMessage.text}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* SECTION 3: ITEMS CURRENTLY IN HANDOVER CUSTODY */}
             <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs">
               <h4 className="font-bold text-base text-slate-900 mb-4 flex items-center gap-2">
                 <ShieldCheck className="w-5 h-5 text-indigo-600" />

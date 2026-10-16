@@ -301,8 +301,43 @@ export function deletePortalItem(itemId: string): void {
 
 // ----------------- USER & PROFILE -----------------
 
+export const ADMIN_CREDENTIALS = {
+  email: 'arindammohanty100@gmail.com',
+  password: 'Am@HIG425',
+  name: 'Arindam Mohanty',
+  rollNumber: '250301120059',
+  role: 'helpdesk_admin' as const,
+  department: 'Campus Collection Desk & Student Services',
+  branch: 'Campus Security & Lost & Found Operations',
+  phone: '+91 98765 43210',
+};
+
+export const ADMIN_USER: User = {
+  id: 'admin-arindam-mohanty',
+  name: ADMIN_CREDENTIALS.name,
+  email: ADMIN_CREDENTIALS.email,
+  rollNumber: ADMIN_CREDENTIALS.rollNumber,
+  department: ADMIN_CREDENTIALS.department,
+  branch: ADMIN_CREDENTIALS.branch,
+  role: ADMIN_CREDENTIALS.role,
+  phone: ADMIN_CREDENTIALS.phone,
+  avatarUrl: 'https://api.dicebear.com/7.x/initials/svg?seed=Arindam%20Mohanty',
+};
+
 export function getPortalUsers(): User[] {
-  return readStorage<User[]>(STORAGE_KEYS.USERS, []);
+  const users = readStorage<User[]>(STORAGE_KEYS.USERS, []);
+  // Ensure the Admin Account is always present in users list and has role 'helpdesk_admin'
+  const adminIndex = users.findIndex(
+    (u) => u.email && u.email.toLowerCase() === ADMIN_CREDENTIALS.email.toLowerCase()
+  );
+  if (adminIndex === -1) {
+    users.unshift(ADMIN_USER);
+    writeStorage(STORAGE_KEYS.USERS, users);
+  } else if (users[adminIndex].role !== 'helpdesk_admin') {
+    users[adminIndex].role = 'helpdesk_admin';
+    writeStorage(STORAGE_KEYS.USERS, users);
+  }
+  return users;
 }
 
 export function getActiveUser(): User | null {
@@ -407,29 +442,33 @@ export function registerPortalUser(userData: Omit<User, 'id'> & { id?: string })
       (normalizedRoll && u.rollNumber && u.rollNumber.toLowerCase() === normalizedRoll)
   );
 
+  const isSuperAdmin = normalizedEmail === ADMIN_CREDENTIALS.email.toLowerCase();
+
   const canonicalId =
-    userData.id ||
-    (existingIdx >= 0 && users[existingIdx].id
-      ? users[existingIdx].id
-      : normalizedRoll
-      ? `user-${normalizedRoll}`
-      : normalizedEmail
-      ? `user-${normalizedEmail.replace(/[^a-z0-9]/g, '_')}`
-      : `user-${Date.now()}`);
+    isSuperAdmin
+      ? ADMIN_USER.id
+      : userData.id ||
+        (existingIdx >= 0 && users[existingIdx].id
+          ? users[existingIdx].id
+          : normalizedRoll
+          ? `user-${normalizedRoll}`
+          : normalizedEmail
+          ? `user-${normalizedEmail.replace(/[^a-z0-9]/g, '_')}`
+          : `user-${Date.now()}`);
 
   const newUser: User = {
     id: canonicalId,
-    name: userData.name,
+    name: isSuperAdmin ? ADMIN_CREDENTIALS.name : userData.name,
     email: userData.email,
-    rollNumber: userData.rollNumber,
+    rollNumber: isSuperAdmin ? ADMIN_CREDENTIALS.rollNumber : userData.rollNumber,
     branch: (userData as any).branch || userData.department || 'General Academics',
-    department: userData.department || (userData as any).branch || 'General Academics',
-    role: userData.role || 'student',
+    department: isSuperAdmin ? ADMIN_CREDENTIALS.department : (userData.department || (userData as any).branch || 'General Academics'),
+    role: isSuperAdmin ? 'helpdesk_admin' : (userData.role || 'student'),
     year: userData.year,
-    phone: userData.phone,
+    phone: userData.phone || (isSuperAdmin ? ADMIN_CREDENTIALS.phone : undefined),
     avatarUrl:
       userData.avatarUrl ||
-      `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(userData.name)}`,
+      `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(isSuperAdmin ? ADMIN_CREDENTIALS.name : userData.name)}`,
   };
 
   if (existingIdx >= 0) {
@@ -449,8 +488,32 @@ export function signOutPortalUser(): void {
 
 // ----------------- HANDOVER TICKETS -----------------
 
+export const INITIAL_DEMO_TICKETS: HandoverTicket[] = [
+  {
+    id: 'ticket-claim-watch-01',
+    itemId: '4aec5e7c-0d26-467b-b96e-f13850f56cba',
+    itemTitle: 'Found Silver Wristwatch with Dial',
+    itemType: 'Found',
+    claimantId: 'user-250301120059',
+    claimantName: 'Student Claimant',
+    claimantEmail: 'student@campus.edu',
+    claimantRoll: '250301120059',
+    secretDetailProof: 'Watch has silver link bracelet by Lee Cooper London. The clasp has engraved initials "AM-26" and a minor hairline mark at the 4 o\'clock marker.',
+    handoverCode: '746430',
+    helpDeskLocation: 'Student Center & Cafeteria Help Desk',
+    scheduledTime: 'Immediate / Pending Review',
+    status: 'Pending Verification',
+    createdAt: new Date().toISOString(),
+  },
+];
+
 export function getHandoverTickets(): HandoverTicket[] {
-  return readStorage<HandoverTicket[]>(STORAGE_KEYS.TICKETS, []);
+  const tickets = readStorage<HandoverTicket[]>(STORAGE_KEYS.TICKETS, INITIAL_DEMO_TICKETS);
+  if (!tickets || tickets.length === 0) {
+    writeStorage(STORAGE_KEYS.TICKETS, INITIAL_DEMO_TICKETS);
+    return INITIAL_DEMO_TICKETS;
+  }
+  return tickets;
 }
 
 export function createHandoverTicket(
@@ -555,6 +618,87 @@ export function verifyHandoverAtDesk(
   }
 
   return { success: true, message: 'Handover verified successfully! Item marked as Returned.', ticket };
+}
+
+/**
+ * Accepts and verifies a collection request / claim for a campus collection desk.
+ * Only callable by Campus Collection Desk Officers / Admin.
+ */
+export function acceptClaimRequest(
+  ticketId: string,
+  officerName: string = 'Arindam Mohanty',
+  notes?: string
+): { success: boolean; message: string; ticket?: HandoverTicket } {
+  const tickets = getHandoverTickets();
+  const ticketIndex = tickets.findIndex((t) => t.id === ticketId);
+  if (ticketIndex === -1) {
+    return { success: false, message: 'Claim ticket not found.' };
+  }
+
+  const ticket = tickets[ticketIndex];
+  ticket.status = 'Completed';
+  ticket.officerNotes = notes || `Collection request approved & verified by Campus Admin (${officerName}). Item released to claimant.`;
+  tickets[ticketIndex] = ticket;
+  writeStorage(STORAGE_KEYS.TICKETS, tickets);
+
+  // Update associated item status to 'Returned'
+  updatePortalItemStatus(
+    ticket.itemId,
+    'Returned',
+    `Collection request accepted at ${ticket.helpDeskLocation}. Verified and released to claimant ${ticket.claimantName} (${ticket.claimantRoll}).`,
+    officerName
+  );
+
+  // Send notification to claimant
+  createNotification({
+    userId: ticket.claimantId,
+    title: 'Claim Request Accepted & Ready',
+    message: `Your collection request for "${ticket.itemTitle}" has been approved by ${officerName} at ${ticket.helpDeskLocation}. You may collect the item.`,
+    type: 'handover',
+    itemId: ticket.itemId,
+  });
+
+  return {
+    success: true,
+    message: `Collection request accepted for "${ticket.itemTitle}". Ticket marked Completed and Item status updated to Returned.`,
+    ticket,
+  };
+}
+
+/**
+ * Rejects a student claim request when proof does not match.
+ */
+export function rejectClaimRequest(
+  ticketId: string,
+  officerName: string = 'Arindam Mohanty',
+  reason: string = 'Proof of ownership details did not match item verification criteria.'
+): { success: boolean; message: string; ticket?: HandoverTicket } {
+  const tickets = getHandoverTickets();
+  const ticketIndex = tickets.findIndex((t) => t.id === ticketId);
+  if (ticketIndex === -1) {
+    return { success: false, message: 'Claim ticket not found.' };
+  }
+
+  const ticket = tickets[ticketIndex];
+  ticket.status = 'Rejected';
+  ticket.officerNotes = `Claim rejected by ${officerName}: ${reason}`;
+  tickets[ticketIndex] = ticket;
+  writeStorage(STORAGE_KEYS.TICKETS, tickets);
+
+  // Send notification to claimant
+  createNotification({
+    userId: ticket.claimantId,
+    title: 'Claim Request Status Update',
+    message: `Your claim request for "${ticket.itemTitle}" was reviewed at ${ticket.helpDeskLocation}: ${reason}`,
+    type: 'handover',
+    itemId: ticket.itemId,
+  });
+
+  return {
+    success: true,
+    message: `Claim request rejected. Claimant notified.`,
+    ticket,
+  };
 }
 
 // ----------------- SECURE CHAT -----------------
